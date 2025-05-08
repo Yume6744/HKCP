@@ -46,6 +46,10 @@ AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR) : CPlugIn(E
 	string appPath = path + "HKCPApproaches.json";
 	string rtePath = path + "HKCPRoutes.json";
 
+	// MAESTRO SEQUENCE PATH
+	path.resize(path.size() - strlen("HKCP/"));
+	amanSequencePath = path + "Mplugin_1.0/MAESTRO_sequence_data.json";
+
 	try {
 		fstream appsFile(appPath);
 		appsJson = json::parse(appsFile);
@@ -867,7 +871,11 @@ string AT3Tags::GetFormattedETA(CFlightPlan& FlightPlan, CRadarTarget& RadarTarg
 
 string AT3Tags::GetAMANDelay(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget) 
 {
-	int delay = trunc(GetCurrentDelay(FlightPlan.GetCallsign()));
+	int delay = ComputeTimeToLose(FlightPlan.GetCallsign());
+	if (delay == 0) {
+		delay = trunc(GetCurrentDelay(FlightPlan.GetCallsign()));
+	}
+
 	if (delay == 0) {
 		return "  ";
 	} else if (delay > 0) {
@@ -942,4 +950,73 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget)
 	}
 
 	return "";
+}
+
+int AT3Tags::ComputeTimeToLose(const std::string& targetCallsign)
+{
+	// Load and parse JSON
+	std::ifstream in(amanSequencePath);
+	if (!in.is_open()) {
+		return 0;
+	}
+	json root;
+	in >> root;
+
+	// Extract threshold from first active runway
+	if (!root.contains("runways") || !root["runways"].is_array()) {
+		return 0;
+	}
+	int threshold = 0;
+	for (const auto& rw : root["runways"]) {
+		if (rw.value("active", false) && rw.contains("rate")) {
+			threshold = rw["rate"].get<int>();
+			break;
+		}
+	}
+	if (threshold <= 0) {
+		return 0;
+	}
+
+	// Locate sequence array
+	if (!root.contains("sequence") || !root["sequence"].is_array()) {
+		return 0;
+	}
+	const auto& seq = root["sequence"];
+
+	// Find targetCallsign and compute
+	for (size_t i = 1; i < seq.size(); ++i) {
+		const auto& curr = seq[i];
+		const auto& prev = seq[i - 1];
+
+		if (!curr.contains("callsign") ||
+			!curr.contains("eet_rwy") ||
+			!prev.contains("eet_rwy"))
+		{
+			continue;  // skip malformed entries
+		}
+
+		if (curr["callsign"].get<std::string>() != targetCallsign) {
+			continue;
+		}
+
+		// Return 0 if AMAN calculated a delay already
+		if (curr["ttlttg_ff"].get<int>() > 0) {
+			return 0;
+		}
+
+		int tCurr = curr["eet_rwy"].get<int>();
+		int tPrev = prev["eet_rwy"].get<int>();
+		int diff = tCurr - tPrev;
+
+		if (diff > threshold) {
+			int loseSec = threshold - diff;
+			return max(loseSec / 60, -5);   // convert to minutes
+		}
+		else {
+			return 0;
+		}
+	}
+
+	// callsign not found or is first in sequence
+	return 0;
 }

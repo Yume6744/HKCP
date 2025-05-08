@@ -90,11 +90,14 @@ public:
 
 	string GetALRT(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
 
+	int ComputeTimeToLose(const std::string& targetCallsign);
+
 protected:
 	int minu;
 	json appsJson;
 	json rteJson;
 	set<string> arptSet;
+	string amanSequencePath;
 
 	COLORREF colorAssumed;
 	COLORREF colorNotAssumed;
