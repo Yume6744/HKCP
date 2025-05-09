@@ -105,6 +105,7 @@ protected:
 	COLORREF colorRedundant;
 	static const unordered_map<string, int> MaxTrackShorten07;
 	static const unordered_map<string, int> MaxTrackShorten25;
+	vector<int> SequenceTimeToGains;
 
 private:
 	template <typename Out>

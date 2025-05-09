@@ -61,6 +61,7 @@ AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR) : CPlugIn(E
 	// MAESTRO SEQUENCE PATH
 	path.resize(path.size() - strlen("HKCP/"));
 	amanSequencePath = path + "Mplugin_1.0/MAESTRO_sequence_data.json";
+	SequenceTimeToGains.resize(100, 0);
 
 
 	try {
@@ -885,9 +886,7 @@ string AT3Tags::GetFormattedETA(CFlightPlan& FlightPlan, CRadarTarget& RadarTarg
 string AT3Tags::GetAMANDelay(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget) 
 {
 	int delay = ComputeTimeToGain(FlightPlan.GetCallsign());
-	if (delay == 0) {
-		delay = trunc(GetCurrentDelay(FlightPlan.GetCallsign()));
-	}
+	delay += trunc(GetCurrentDelay(FlightPlan.GetCallsign()));
 
 	if (delay == 0) {
 		return "  ";
@@ -995,6 +994,8 @@ int AT3Tags::ComputeTimeToGain(const std::string& targetCallsign)
 		return 0;
 	}
 	const auto& seq = root["sequence"];
+	SequenceTimeToGains.resize(seq.size());
+	int runningTTG = 0;
 
 	// Find targetCallsign and compute
 	for (size_t i = 1; i < seq.size(); ++i) {
@@ -1012,9 +1013,11 @@ int AT3Tags::ComputeTimeToGain(const std::string& targetCallsign)
 			continue;
 		}
 
+		runningTTG += SequenceTimeToGains[i - 1];
 		// Return 0 if AMAN calculated a delay already
-		if (curr["ttlttg_ff"].get<int>() > 0) {
-			return 0;
+		if (curr["ttlttg_ff"].get<int>() + runningTTG > 0) {
+			SequenceTimeToGains[i] = 0;
+			return runningTTG / 60;
 		}
 
 		int tCurr = curr["eet_rwy"].get<int>();
@@ -1024,10 +1027,11 @@ int AT3Tags::ComputeTimeToGain(const std::string& targetCallsign)
 		string ff = curr["ff"].get<string>();
 
 		if (diff < threshold) {
-			return 0;
+			SequenceTimeToGains[i] = 0;
+			return runningTTG / 60;
 		}
 
-		int GainSec = threshold - diff;
+		int GainSec = threshold - diff + runningTTG;
 		int maxGainSec;
 		if (rwy.find("07") != string::npos) {
 			maxGainSec = MaxTrackShorten07.at(ff);
@@ -1035,7 +1039,9 @@ int AT3Tags::ComputeTimeToGain(const std::string& targetCallsign)
 		else {
 			maxGainSec = MaxTrackShorten25.at(ff);
 		}
-		return max(maxGainSec / 60, GainSec / 60);
+		int actualGainSec = max(maxGainSec, GainSec);
+		SequenceTimeToGains[i] = actualGainSec;
+		return actualGainSec / 60;
 	}
 
 	// callsign not found or is first in sequence
