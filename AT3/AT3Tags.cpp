@@ -12,6 +12,18 @@
 
 using namespace EuroScopePlugIn;
 
+const unordered_map<string, int> AT3Tags::MaxTrackShorten07 = {
+    {"MUSEL", -110},
+	{"MANGO", -10},
+	{"MURRY", -60}
+};
+
+const unordered_map<string, int> AT3Tags::MaxTrackShorten25 = {
+	{"MUSEL", -150},
+	{"MANGO", -5},
+	{"MURRY", -150}
+};
+
 AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR) : CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE, MY_PLUGIN_NAME, MY_PLUGIN_VERSION, MY_PLUGIN_DEVELOPER, MY_PLUGIN_COPYRIGHT)
 {
 	RegisterTagItemType("AT3 Altitude", TAG_ITEM_AT3_ALTITUDE);
@@ -49,6 +61,7 @@ AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR) : CPlugIn(E
 	// MAESTRO SEQUENCE PATH
 	path.resize(path.size() - strlen("HKCP/"));
 	amanSequencePath = path + "Mplugin_1.0/MAESTRO_sequence_data.json";
+
 
 	try {
 		fstream appsFile(appPath);
@@ -881,7 +894,7 @@ string AT3Tags::GetAMANDelay(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget)
 	} else if (delay > 0) {
 		return "+" + to_string(delay);
 	}
-	else if (delay < 0) {
+	else {
 		return to_string(delay);
 	}
 }
@@ -1007,14 +1020,22 @@ int AT3Tags::ComputeTimeToLose(const std::string& targetCallsign)
 		int tCurr = curr["eet_rwy"].get<int>();
 		int tPrev = prev["eet_rwy"].get<int>();
 		int diff = tCurr - tPrev;
+		string rwy = curr["rwy"].get<string>();
+		string ff = curr["ff"].get<string>();
 
-		if (diff > threshold) {
-			int loseSec = threshold - diff;
-			return max(loseSec / 60, -5);   // convert to minutes
-		}
-		else {
+		if (diff < threshold) {
 			return 0;
 		}
+
+		int loseSec = threshold - diff;
+		int maxLoseSec;
+		if (rwy.find("07") != string::npos) {
+			maxLoseSec = MaxTrackShorten07.at(ff);
+		}
+		else {
+			maxLoseSec = MaxTrackShorten25.at(ff);
+		}
+		return max(maxLoseSec / 60, loseSec / 60);
 	}
 
 	// callsign not found or is first in sequence

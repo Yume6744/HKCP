@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <unordered_map>
 #include <iostream>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -102,6 +103,8 @@ protected:
 	COLORREF colorAssumed;
 	COLORREF colorNotAssumed;
 	COLORREF colorRedundant;
+	static const unordered_map<string, int> MaxTrackShorten07;
+	static const unordered_map<string, int> MaxTrackShorten25;
 
 private:
 	template <typename Out>
