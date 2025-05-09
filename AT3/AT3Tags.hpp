@@ -91,7 +91,7 @@ public:
 
 	string GetALRT(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
 
-	int ComputeTimeToLose(const std::string& targetCallsign);
+	int ComputeTimeToGain(const std::string& targetCallsign);
 
 protected:
 	int minu;

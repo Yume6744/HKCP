@@ -884,7 +884,7 @@ string AT3Tags::GetFormattedETA(CFlightPlan& FlightPlan, CRadarTarget& RadarTarg
 
 string AT3Tags::GetAMANDelay(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget) 
 {
-	int delay = ComputeTimeToLose(FlightPlan.GetCallsign());
+	int delay = ComputeTimeToGain(FlightPlan.GetCallsign());
 	if (delay == 0) {
 		delay = trunc(GetCurrentDelay(FlightPlan.GetCallsign()));
 	}
@@ -965,7 +965,7 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget)
 	return "";
 }
 
-int AT3Tags::ComputeTimeToLose(const std::string& targetCallsign)
+int AT3Tags::ComputeTimeToGain(const std::string& targetCallsign)
 {
 	// Load and parse JSON
 	std::ifstream in(amanSequencePath);
@@ -1027,15 +1027,15 @@ int AT3Tags::ComputeTimeToLose(const std::string& targetCallsign)
 			return 0;
 		}
 
-		int loseSec = threshold - diff;
-		int maxLoseSec;
+		int GainSec = threshold - diff;
+		int maxGainSec;
 		if (rwy.find("07") != string::npos) {
-			maxLoseSec = MaxTrackShorten07.at(ff);
+			maxGainSec = MaxTrackShorten07.at(ff);
 		}
 		else {
-			maxLoseSec = MaxTrackShorten25.at(ff);
+			maxGainSec = MaxTrackShorten25.at(ff);
 		}
-		return max(maxLoseSec / 60, loseSec / 60);
+		return max(maxGainSec / 60, GainSec / 60);
 	}
 
 	// callsign not found or is first in sequence
