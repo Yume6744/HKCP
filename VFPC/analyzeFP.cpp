@@ -259,8 +259,26 @@ bool CVFPCPlugin::IsAirwayMatch(const string& route, const json& rule)
 
 string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 {
-	// Check allowed flight levels
+	// Check for time restrictions (ENVAR M750 DADON G581)
 	rfl = rfl / 100;
+	if (rules.contains("time")) {
+
+		time_t curr_time;
+		curr_time = time(NULL);
+		tm* tm_gmt = gmtime(&curr_time);
+
+		for (const auto& time : rules["time"]) {
+			if (tm_gmt->tm_hour >= time["start"].get<int>() && tm_gmt->tm_hour <= time["end"].get<int>()) {
+				for (const auto& fl : time["unavailableLevels"]) {
+					if (rfl == stoi(fl.get<string>())) {
+						return "FLR"; // Level is time restricted
+					}
+				}
+			}
+		}
+	}
+
+	// Check allowed flight levels
 	if (rules.contains("allowed_fls")) {
 		for (const auto& fl : rules["allowed_fls"]) {
 			if (rfl == stoi(fl.get<string>())) {
