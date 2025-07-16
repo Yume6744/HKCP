@@ -257,7 +257,7 @@ bool CVFPCPlugin::IsAirwayMatch(const string& route, const json& rule)
 	return IsStringInList(newRoute, airways);
 }
 
-string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
+string CVFPCPlugin::CheckAltitude(int rfl, const json& rules, const string& destination)
 {
 	// Check for time restrictions (ENVAR M750 DADON G581)
 	rfl = rfl / 100;
@@ -282,6 +282,15 @@ string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 	if (rules.contains("allowed_fls")) {
 		for (const auto& fl : rules["allowed_fls"]) {
 			if (rfl == stoi(fl.get<string>())) {
+				if (rules.contains("restrictedDestinations")) {
+					for (const auto& dest : rules["restrictedDestinations"]) {
+						for (const auto& level : dest["restrictedLevels"]) {
+							if (rfl == stoi(level.get<string>()) && destination.find(dest["icaoStartsWith"].get<string>()) == string::npos) { // Check if destination starts with the provided ICAO
+								return "FLR";
+							}
+						}
+					}
+				}
 				return "OK";
 			}
 		}
@@ -325,7 +334,7 @@ string CVFPCPlugin::ValidateRules(const json& rule, const string& destination, c
 			return "CHK"; // Airway mismatch
 		}
 
-		return CheckAltitude(rfl, rule); // Check altitude restrictions
+		return CheckAltitude(rfl, rule, destination); // Check altitude restrictions
 	}
 	catch (...) {
 		return "CHK";

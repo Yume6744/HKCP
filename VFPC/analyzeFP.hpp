@@ -60,7 +60,7 @@ public:
 
 	bool IsAirwayMatch(const string& route, const json& rule);
 
-	string CheckAltitude(int rfl, const json& rules);
+	string CheckAltitude(int rfl, const json& rules, const string& destination);
 
 	string ValidateRules(const json& rule, const string& destination, const string& route, int rfl);
 
