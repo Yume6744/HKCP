@@ -288,7 +288,7 @@ string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 					return "OK";
 			}
 		}
-			return "FLR"; // If RFL does not match allowed_fls
+		return "FLR"; // If RFL does not match allowed_fls
 	}
 
 	// Check max/min flight levels
