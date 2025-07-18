@@ -222,7 +222,10 @@ bool CVFPCPlugin::IsDestinationMatch(const string& destination, const json& rule
 		return true; // No destination restriction
 	}
 	for (const auto& dest : rule["destinations"]) {
-		if (destination.find(dest.get<string>()) != string::npos) {
+		if (destination.find(dest.get<string>()) != string::npos && dest.get<string>().find("*") == string::npos) { // Check if wildcard is present
+			return true;
+		}
+		else if (destination.rfind(dest.get<string>().substr(0, dest.get<string>().find("*")), 0) == 0) { // Check if ICAO starts with required prefix
 			return true;
 		}
 	}
@@ -257,7 +260,7 @@ bool CVFPCPlugin::IsAirwayMatch(const string& route, const json& rule)
 	return IsStringInList(newRoute, airways);
 }
 
-string CVFPCPlugin::CheckAltitude(int rfl, const json& rules, const string& destination)
+string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 {
 	// Check for time restrictions (ENVAR M750 DADON G581)
 	rfl = rfl / 100;
@@ -282,19 +285,10 @@ string CVFPCPlugin::CheckAltitude(int rfl, const json& rules, const string& dest
 	if (rules.contains("allowed_fls")) {
 		for (const auto& fl : rules["allowed_fls"]) {
 			if (rfl == stoi(fl.get<string>())) {
-				if (rules.contains("restrictedDestinations")) {
-					for (const auto& dest : rules["restrictedDestinations"]) {
-						for (const auto& level : dest["restrictedLevels"]) {
-							if (rfl == stoi(level.get<string>()) && destination.find(dest["icaoStartsWith"].get<string>()) == string::npos) { // Check if destination starts with the provided ICAO
-								return "FLR";
-							}
-						}
-					}
-				}
-				return "OK";
+					return "OK";
 			}
 		}
-		return "FLR"; // If RFL does not match allowed_fls
+			return "FLR"; // If RFL does not match allowed_fls
 	}
 
 	// Check max/min flight levels
@@ -334,7 +328,7 @@ string CVFPCPlugin::ValidateRules(const json& rule, const string& destination, c
 			return "CHK"; // Airway mismatch
 		}
 
-		return CheckAltitude(rfl, rule, destination); // Check altitude restrictions
+		return CheckAltitude(rfl, rule); // Check altitude restrictions
 	}
 	catch (...) {
 		return "CHK";
