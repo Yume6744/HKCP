@@ -285,7 +285,7 @@ string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 	if (rules.contains("allowed_fls")) {
 		for (const auto& fl : rules["allowed_fls"]) {
 			if (rfl == stoi(fl.get<string>())) {
-					return "OK";
+				return "OK";
 			}
 		}
 		return "FLR"; // If RFL does not match allowed_fls
