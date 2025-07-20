@@ -274,7 +274,7 @@ string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 			if (tm_gmt->tm_hour >= time["start"].get<int>() && tm_gmt->tm_hour <= time["end"].get<int>()) {
 				for (const auto& fl : time["unavailableLevels"]) {
 					if (rfl == stoi(fl.get<string>())) {
-						return "FLR"; // Level is time restricted
+							return "FLR"; // Level is time restricted
 					}
 				}
 			}
