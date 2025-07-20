@@ -222,7 +222,7 @@ bool CVFPCPlugin::IsDestinationMatch(const string& destination, const json& rule
 		return true; // No destination restriction
 	}
 	for (const auto& dest : rule["destinations"]) {
-		if (destination.find(dest.get<string>()) != string::npos && dest.get<string>().find("*") == string::npos) { // Check if wildcard is present
+		if (destination.find(dest.get<string>()) != string::npos) { // Check if wildcard is present
 			return true;
 		}
 		else if (destination.rfind(dest.get<string>().substr(0, dest.get<string>().find("*")), 0) == 0) { // Check if ICAO starts with required prefix
