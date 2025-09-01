@@ -269,12 +269,32 @@ string CVFPCPlugin::CheckAltitude(int rfl, const json& rules)
 		time_t curr_time;
 		curr_time = time(NULL);
 		tm* tm_gmt = gmtime(&curr_time);
+		bool startTimeGreater = false;
 
 		for (const auto& time : rules["time"]) {
-			if (tm_gmt->tm_hour >= time["start"].get<int>() && tm_gmt->tm_hour <= time["end"].get<int>()) {
-				for (const auto& fl : time["unavailableLevels"]) {
-					if (rfl == stoi(fl.get<string>())) {
-						return "FLR"; // Level is time restricted
+
+			if (time["start"].get<int>() > time["end"].get<int>()) {
+				startTimeGreater = true;
+			}
+			else {
+				startTimeGreater = false;
+			} // If start time is greater than end time, set bool to true (to allow time periods which wrap around a day to function correctly e.g. 2300-1159z)
+			
+			if (startTimeGreater == false) {
+				if (tm_gmt->tm_hour >= time["start"].get<int>() && tm_gmt->tm_hour <= time["end"].get<int>()) {
+					for (const auto& fl : time["unavailableLevels"]) {
+						if (rfl == stoi(fl.get<string>())) {
+							return "FLR"; // Level is time restricted
+						}
+					}
+				}
+			}
+			else {
+				if (tm_gmt->tm_hour >= time["start"].get<int>() || tm_gmt->tm_hour <= time["end"].get<int>()) {
+					for (const auto& fl : time["unavailableLevels"]) {
+						if (rfl == stoi(fl.get<string>())) {
+							return "FLR"; // Level is time restricted
+						}
 					}
 				}
 			}
