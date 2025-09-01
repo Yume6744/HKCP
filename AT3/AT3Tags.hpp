@@ -54,39 +54,43 @@ public:
 
 	vector<string> GetAvailableRtes(string airport, string runway);
 
-	string GetFormattedAltitude(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetFormattedAltitude(CRadarTarget& RadarTarget);
 
 	string GetFormattedAltitudedAssigned(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
 
-	string GetFormattedTrack(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetFormattedTrack(CRadarTarget& RadarTarget);
 
-	string GetFormattedHeadingAssigned(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetFormattedHeadingAssigned(CFlightPlan& FlightPlan);
 
-	string GetFormattedGroundspeed(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetFormattedGroundspeed(CRadarTarget& RadarTarget);
 
-	string GetFormattedSpeedAssigned(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetFormattedSpeedAssigned(CFlightPlan& FlightPlan);
 
 	void GetRouteCode(CFlightPlan& FlightPlan);
 
-	string GetRouteCodeLine4(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetRouteCodeLine4(CFlightPlan& FlightPlan);
 
 	void GetAssignedAPP(CFlightPlan& FlightPlan);
 
-	string GetAPPDEPLine4(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetAPPDEPLine4(CFlightPlan& FlightPlan);
 
-	string GetAMCLine4 (CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetAMCLine4 (CFlightPlan& FlightPlan);
 
-	string GetFormattedETA(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget, int minutes);
+	string GetFormattedETA(CFlightPlan& FlightPlan, int minutes);
 
-	string GetAMANDelay(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetAMANDelay(CFlightPlan& FlightPlan);
 
-	string GetCallsign(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetCallsign(CFlightPlan& FlightPlan);
 
-	string GetATYPWTC(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetADSBCallsign(CRadarTarget& RadarTarget);
 
-	string GetVSIndicator(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetATYPWTC(CFlightPlan& FlightPlan);
 
-	string GetFormattedArrivalRwy(CFlightPlan& FlightPlan, CRadarTarget& RadarTarget);
+	string GetVSIndicator(CRadarTarget& RadarTarget);
+
+	string GetFormattedArrivalRwy(CFlightPlan& FlightPlan);
+
+	string GetALRT(CFlightPlan& FlightPlan);
 
 protected:
 	int minu;
