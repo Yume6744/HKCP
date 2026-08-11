@@ -560,6 +560,21 @@ void AT3Tags::OnFunctionCall(int FunctionId, const char* sItemString, POINT Pt, 
 	}
 }
 
+void SplitCallsign(const std::string& callsign, std::string& prefix, std::string& number) {
+	prefix = "";
+	number = "";
+	for (char c : callsign) {
+		// All letters belongs to prefix
+		if (std::isalpha(c) && number.empty()) {
+			prefix += c;
+		}
+		// Rest belongs to number
+		else {
+			number += c;
+		}
+	}
+}
+
 string AT3Tags::GetFormattedAltitude(CRadarTarget& RadarTarget)
 {
 	int altitude = RadarTarget.GetPosition().GetPressureAltitude();
@@ -1014,6 +1029,41 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan)
 
 	if (FlightPlan.GetSectorExitMinutes() == -1 && FlightPlan.GetTrackingControllerIsMe() && controllerSuffix > 0 && controllerSuffix != 4) { // not unicom or tower
 		return "CJS";
+	}
+
+	// SCA warning
+	string CurrentCallsign = FlightPlan.GetCallsign();
+
+	if (FlightPlan.GetTrackingControllerIsMe() == true) {
+		for (EuroScopePlugIn::CRadarTarget otherPlane = RadarTargetSelectFirst(); otherPlane.IsValid(); otherPlane = RadarTargetSelectNext(otherPlane)) {
+			if (!otherPlane.GetCorrelatedFlightPlan().GetTrackingControllerIsMe()) continue;
+			if (otherPlane.GetCallsign() == CurrentCallsign) continue;
+
+			string otherCallsign = otherPlane.GetCallsign();
+
+			std::string CurrentPrefix, CurrentNum, Prefix2, Num2;
+			SplitCallsign(CurrentCallsign, CurrentPrefix, CurrentNum);
+			SplitCallsign(otherCallsign, Prefix2, Num2);
+
+			int matchCount = 0;
+			string tempNum2 = Num2;
+			for (char c : CurrentNum) {
+				size_t pos = tempNum2.find(c);
+				if (pos != std::string::npos) {
+					matchCount++;
+					tempNum2.erase(pos, 1);
+				}
+			}
+			float longerNumLength = max(CurrentNum.length(), Num2.length());
+			float numSimilarity = matchCount / longerNumLength;
+
+			if (numSimilarity == 1) {
+				return "SCA";
+			}
+			else if (CurrentPrefix == Prefix2 && numSimilarity > 0.5) {
+				return "SCA";
+			}
+		}
 	}
 
 	return "";
