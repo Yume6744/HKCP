@@ -560,7 +560,7 @@ void AT3Tags::OnFunctionCall(int FunctionId, const char* sItemString, POINT Pt, 
 	}
 }
 
-void SplitCallsign(const std::string& callsign, std::string& prefix, std::string& number) {
+void AT3Tags::SplitCallsign(const std::string& callsign, std::string& prefix, std::string& number) {
 	prefix = "";
 	number = "";
 	for (char c : callsign) {
@@ -572,6 +572,30 @@ void SplitCallsign(const std::string& callsign, std::string& prefix, std::string
 		else {
 			number += c;
 		}
+	}
+}
+
+bool AT3Tags::isSimilarCallsign(const std::string & CurrentPrefix, std::string & CurrentNum, std::string & otherPrefix, std::string & otherNum) {
+	int matchCount = 0;
+	string tempNum2 = otherNum;
+	for (char c : CurrentNum) {
+		size_t pos = tempNum2.find(c);
+		if (pos != std::string::npos) {
+			matchCount++;
+			tempNum2.erase(pos, 1);
+		}
+	}
+	float longerNumLength = max(CurrentNum.length(), otherNum.length());
+	float numSimilarity = matchCount / longerNumLength;
+
+	if (CurrentNum == otherNum) {
+		return true;
+	}
+	else if (CurrentPrefix == otherPrefix && numSimilarity > 0.5) {
+		return true;
+	}
+	else {
+		return false;
 	}
 }
 
@@ -1034,6 +1058,10 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan)
 	// SCA warning
 	string CurrentCallsign = FlightPlan.GetCallsign();
 
+	std::string CurrentPrefix, CurrentNum;
+	SplitCallsign(CurrentCallsign, CurrentPrefix, CurrentNum);
+
+	
 	if (FlightPlan.GetTrackingControllerIsMe() == true) {
 		for (EuroScopePlugIn::CRadarTarget otherPlane = RadarTargetSelectFirst(); otherPlane.IsValid(); otherPlane = RadarTargetSelectNext(otherPlane)) {
 			if (!otherPlane.GetCorrelatedFlightPlan().GetTrackingControllerIsMe()) continue;
@@ -1041,31 +1069,15 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan)
 
 			string otherCallsign = otherPlane.GetCallsign();
 
-			std::string CurrentPrefix, CurrentNum, Prefix2, Num2;
-			SplitCallsign(CurrentCallsign, CurrentPrefix, CurrentNum);
+			std::string Prefix2, Num2;
 			SplitCallsign(otherCallsign, Prefix2, Num2);
 
-			int matchCount = 0;
-			string tempNum2 = Num2;
-			for (char c : CurrentNum) {
-				size_t pos = tempNum2.find(c);
-				if (pos != std::string::npos) {
-					matchCount++;
-					tempNum2.erase(pos, 1);
-				}
-			}
-			float longerNumLength = max(CurrentNum.length(), Num2.length());
-			float numSimilarity = matchCount / longerNumLength;
-
-			if (numSimilarity == 1) {
-				return "SCA";
-			}
-			else if (CurrentPrefix == Prefix2 && numSimilarity > 0.5) {
+			if (isSimilarCallsign(CurrentPrefix, CurrentNum, Prefix2, Num2)){
 				return "SCA";
 			}
 		}
 	}
-
+	
 	return "";
 }
 
