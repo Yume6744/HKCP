@@ -94,6 +94,8 @@ public:
 
 	static bool isSimilarCallsign(const std::string& CurrentPrefix, std::string& CurrentNum, std::string& otherPrefix, std::string& otherNum);
 
+	static bool isCorrelateCorrect(CFlightPlan FlightPlan, string CurrentCallsign);
+
 	string GetALRT(CFlightPlan& FlightPlan);
 
 	string GetWTG(CFlightPlan& FlightPlan);
