@@ -599,6 +599,13 @@ bool AT3Tags::isSimilarCallsign(const std::string & CurrentPrefix, std::string &
 	}
 }
 
+bool AT3Tags::isCorrelateCorrect(CFlightPlan FlightPlan, string CurrentCallsign) {
+	string correlatedCallsign = FlightPlan.GetCorrelatedRadarTarget().GetCallsign();
+	if (CurrentCallsign != correlatedCallsign) {
+		return false;
+	}
+}
+
 string AT3Tags::GetFormattedAltitude(CRadarTarget& RadarTarget)
 {
 	int altitude = RadarTarget.GetPosition().GetPressureAltitude();
@@ -1040,6 +1047,15 @@ string AT3Tags::GetFormattedArrivalRwy(CFlightPlan& FlightPlan)
 
 string AT3Tags::GetALRT(CFlightPlan& FlightPlan)
 {
+	string CurrentCallsign = FlightPlan.GetCallsign();
+
+	// ID warning
+	if (FlightPlan.GetCorrelatedRadarTarget().IsValid() == true) {
+		if (!isCorrelateCorrect(FlightPlan, CurrentCallsign)) {
+			return "ID";
+		}
+	}
+
 	// HOW warning
 	if (FlightPlan.GetState() == FLIGHT_PLAN_STATE_TRANSFER_FROM_ME_INITIATED) {
 		return "HOW";
@@ -1056,12 +1072,10 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan)
 	}
 
 	// SCA warning
-	string CurrentCallsign = FlightPlan.GetCallsign();
 
 	std::string CurrentPrefix, CurrentNum;
 	SplitCallsign(CurrentCallsign, CurrentPrefix, CurrentNum);
 
-	
 	if (FlightPlan.GetTrackingControllerIsMe() == true) {
 		for (EuroScopePlugIn::CRadarTarget otherPlane = RadarTargetSelectFirst(); otherPlane.IsValid(); otherPlane = RadarTargetSelectNext(otherPlane)) {
 			if (!otherPlane.GetCorrelatedFlightPlan().GetTrackingControllerIsMe()) continue;
