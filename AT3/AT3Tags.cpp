@@ -1050,9 +1050,19 @@ string AT3Tags::GetALRT(CFlightPlan& FlightPlan)
 	string CurrentCallsign = FlightPlan.GetCallsign();
 
 	// ID warning
-	if (FlightPlan.GetCorrelatedRadarTarget().IsValid() == true) {
+	if (FlightPlan.GetCorrelatedRadarTarget().IsValid()) {
 		if (!isCorrelateCorrect(FlightPlan, CurrentCallsign)) {
 			return "ID";
+		}
+	}
+
+	// CC warning
+	if (FlightPlan.GetCorrelatedRadarTarget().IsValid()) {
+		string receivedSquawk = FlightPlan.GetCorrelatedRadarTarget().GetPosition().GetSquawk();
+		string assignedSquawk = FlightPlan.GetControllerAssignedData().GetSquawk();
+
+		if (assignedSquawk != "" && receivedSquawk != assignedSquawk) {
+			return "CC";
 		}
 	}
 
