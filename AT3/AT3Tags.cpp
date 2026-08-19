@@ -572,6 +572,7 @@ void AT3Tags::OnFunctionCall(int FunctionId, const char* sItemString, POINT Pt, 
 			}
 			break;
 		}
+<<<<<<< HEAD
 	}
 }
 
@@ -618,6 +619,8 @@ bool AT3Tags::isCorrelateCorrect(CFlightPlan FlightPlan, string CurrentCallsign)
 	string correlatedCallsign = FlightPlan.GetCorrelatedRadarTarget().GetCallsign();
 	if (CurrentCallsign != correlatedCallsign) {
 		return false;
+=======
+>>>>>>> e057df8 (Implement basic Route Draw)
 	}
 }
 
