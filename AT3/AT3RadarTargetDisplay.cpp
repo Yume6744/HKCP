@@ -3,6 +3,7 @@
 #include "Constant.hpp"
 #include "EuroScopePlugIn.h"
 #include "AT3RadarTargetDisplay.hpp"
+#include <time.h>
 
 using namespace Gdiplus;
 using namespace EuroScopePlugIn;
@@ -13,6 +14,7 @@ AT3RadarTargetDisplay::AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOff
 	colorAssumed.SetFromCOLORREF(colorA);
 	colorNotAssumed.SetFromCOLORREF(colorNA);
 	colorRedundant.SetFromCOLORREF(colorR);
+	colorRouteDraw.SetFromCOLORREF(ROUTE_DRAW);
 }
 
 void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
@@ -60,6 +62,8 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 		// Get Flight plan and position data
 		CFlightPlan fp = Display->GetPlugIn()->FlightPlanSelect(acft.GetCallsign());
 		CRadarTargetPositionData pd = acft.GetPosition();
+
+		string callsign = fp.GetCallsign();
 
 		if (!fp.IsValid() || !pd.IsValid()) {
 			acft = GetPlugIn()->RadarTargetSelectNext(acft);
@@ -141,57 +145,139 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 		g.EndContainer(gContainer);
 		DeleteObject(&aircraftIcon);
 
-		if (fp.GetState() == FLIGHT_PLAN_STATE_ASSUMED && !CJSLabelShowWhenTracked) {
-			acft = GetPlugIn()->RadarTargetSelectNext(acft);
-			continue;
-		}
-
 		// Draw CJS
 		dc.SelectObject(EuroScopeFont);
 		dc.SetTextAlign(TA_CENTER);
 		CSize CJSLabelSize;
 
-		// Set CJS label text to CJS or frequency based on saved state
-		string CJSLabelText;
-		CJSLabelShowFreq.emplace(fp.GetCallsign(), false);
-		if (fp.GetState() == FLIGHT_PLAN_STATE_TRANSFER_FROM_ME_INITIATED) {
-			if (CJSLabelShowFreq[fp.GetCallsign()]) {
-				CJSLabelText = GetControllerFreqFromId(fp.GetHandoffTargetControllerId());
-				dc.SetTextColor(colorAssumed.ToCOLORREF());
+		if (fp.GetState() != FLIGHT_PLAN_STATE_ASSUMED && CJSLabelShowWhenTracked) {
+			// Set CJS label text to CJS or frequency based on saved state
+			string CJSLabelText;
+			CJSLabelShowFreq.emplace(fp.GetCallsign(), false);
+			if (fp.GetState() == FLIGHT_PLAN_STATE_TRANSFER_FROM_ME_INITIATED) {
+				if (CJSLabelShowFreq[fp.GetCallsign()]) {
+					CJSLabelText = GetControllerFreqFromId(fp.GetHandoffTargetControllerId());
+					dc.SetTextColor(colorAssumed.ToCOLORREF());
+				}
+				else {
+					CJSLabelText = fp.GetHandoffTargetControllerId();
+				}
+			}
+			else if (fp.GetState() == FLIGHT_PLAN_STATE_ASSUMED) {
+				if (CJSLabelShowFreq[fp.GetCallsign()]) {
+					CJSLabelText = GetControllerFreqFromId(GetControllerIdFromCallsign(fp.GetCoordinatedNextController()));
+					dc.SetTextColor(colorAssumed.ToCOLORREF());
+				}
+				else {
+					CJSLabelText = GetControllerIdFromCallsign(fp.GetCoordinatedNextController());
+				}
 			}
 			else {
-				CJSLabelText = fp.GetHandoffTargetControllerId();
+				if (CJSLabelShowFreq[fp.GetCallsign()]) {
+					CJSLabelText = GetControllerFreqFromId(fp.GetTrackingControllerId());
+					dc.SetTextColor(colorAssumed.ToCOLORREF());
+				}
+				else {
+					CJSLabelText = fp.GetTrackingControllerId();
+				}
 			}
-		} else if (fp.GetState() == FLIGHT_PLAN_STATE_ASSUMED) {
-			if (CJSLabelShowFreq[fp.GetCallsign()]) {
-				CJSLabelText = GetControllerFreqFromId(GetControllerIdFromCallsign(fp.GetCoordinatedNextController()));
-				dc.SetTextColor(colorAssumed.ToCOLORREF());
+
+			// Remove trailing up to two trailing zeroes
+			for (int i = 0; i < 2; i++) {
+				if (CJSLabelText.back() == '0') {
+					CJSLabelText.pop_back();
+				}
+			}
+			dc.TextOutA(acftLocation.x, acftLocation.y - CJSLabelOffset, CJSLabelText.c_str());
+
+			// Create rectangle around CJS label for click spot
+			CJSLabelSize = dc.GetTextExtent(CJSLabelText.c_str());
+			POINT CJSLabelPoint = { acftLocation.x - CJSLabelSize.cx / 2, acftLocation.y - CJSLabelOffset };
+			CRect CJSLabelRect(CJSLabelPoint, CJSLabelSize);
+			Display->AddScreenObject(CJS_INDICATOR, fp.GetCallsign(), CJSLabelRect, true, "");
+		}
+
+		// Create route draw
+		if (AT3Tags::showRouteDraw[fp.GetCallsign()]) {
+			Pen routePen(colorRouteDraw, 1);
+			CFlightPlanExtractedRoute extractedRoute = fp.GetExtractedRoute();
+			int pointCount = extractedRoute.GetPointsNumber();
+			int nextPointID;
+			bool isFirstPoint = true;
+			bool isRAM = fp.GetRAMFlag();
+			POINT prevPoint;
+			POINT nextPoint;
+			const char* airway;
+			const char* nextPointName;
+			string routeTag;
+			string nextPointETA;
+
+			time_t curr_time;
+			curr_time = time(NULL);
+			tm* tm_gmt = gmtime(&curr_time);
+
+			dc.SetTextColor(colorRouteDraw.ToCOLORREF());
+
+			if (extractedRoute.GetPointsAssignedIndex() != -1) {
+				nextPointID = extractedRoute.GetPointsAssignedIndex();
+				airway = "";
 			}
 			else {
-				CJSLabelText = GetControllerIdFromCallsign(fp.GetCoordinatedNextController());
+				nextPointID = extractedRoute.GetPointsCalculatedIndex();
+				airway = extractedRoute.GetPointAirwayName(nextPointID);
 			}
-		} else {
-			if (CJSLabelShowFreq[fp.GetCallsign()]) {
-				CJSLabelText = GetControllerFreqFromId(fp.GetTrackingControllerId());
-				dc.SetTextColor(colorAssumed.ToCOLORREF());
-			} else {
-				CJSLabelText = fp.GetTrackingControllerId();
+
+			for (nextPointID; nextPointID < pointCount; nextPointID++) {
+				nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
+
+				// 1. Get total raw minutes
+				int totalMinutes = tm_gmt->tm_min + extractedRoute.GetPointDistanceInMinutes(nextPointID);
+
+				// 2. Calculate correct hour and minute with wrapping
+				// Add the extra hours to current hour, then wrap at 24
+				int finalHour = (tm_gmt->tm_hour + (totalMinutes / 60)) % 24;
+				// Wrap minutes at 60
+				int finalMin = totalMinutes % 60;
+
+				// 3. Format with leading zeros ("%02d" means pad with zero to 2 digits)
+				char buf[5];
+				snprintf(buf, sizeof(buf), "%02d%02d", finalHour, finalMin);
+				nextPointETA = buf;
+
+				nextPointName = extractedRoute.GetPointName(nextPointID);
+				routeTag = string(nextPointName) + " " + nextPointETA;
+				CSize routeTagSize = dc.GetTextExtent(routeTag.c_str());
+
+				//If offroute, skip this iteration
+				if (isRAM) {
+					prevPoint = nextPoint;
+					isFirstPoint = false;
+					isRAM = false;
+				}//If next point is Airport, end the for loop
+				else if (std::string(nextPointName).length() == 4) {
+					break;
+				}//If is first point, draw from aircraft
+				else if (isFirstPoint) {
+					g.DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)nextPoint.x, (INT)nextPoint.y);							//Draw route line
+					dc.TextOutA(((INT)acftLocation.x + (INT)nextPoint.x) / 2, ((INT)acftLocation.y + (INT)nextPoint.y) / 2, airway);				//Write airway
+					g.DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);				//Draw Tag line up
+					g.DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);				//Draw Tag line horizontal
+					dc.TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());	//Draw Route Tag
+					prevPoint = nextPoint;
+					isFirstPoint = false;
+				}//Else draw point to point
+				else {
+					g.DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
+					dc.TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+					g.DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);
+					g.DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);
+					dc.TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+					prevPoint = nextPoint;
+				}
+
+				airway = extractedRoute.GetPointAirwayName(nextPointID + 1);
 			}
 		}
-
-		// Remove trailing up to two trailing zeroes
-		for (int i = 0; i < 2; i++) {
-			if (CJSLabelText.back() == '0') {
-				CJSLabelText.pop_back();
-			}
-		}
-		dc.TextOutA(acftLocation.x, acftLocation.y - CJSLabelOffset, CJSLabelText.c_str());
-
-		// Create rectangle around CJS label for click spot
-		CJSLabelSize = dc.GetTextExtent(CJSLabelText.c_str());
-		POINT CJSLabelPoint = { acftLocation.x - CJSLabelSize.cx / 2, acftLocation.y - CJSLabelOffset};
-		CRect CJSLabelRect(CJSLabelPoint, CJSLabelSize);
-		Display->AddScreenObject(CJS_INDICATOR, fp.GetCallsign(), CJSLabelRect, true, "");
 
 		// Increment to next aircraft
 		acft = GetPlugIn()->RadarTargetSelectNext(acft);
