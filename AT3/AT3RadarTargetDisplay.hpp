@@ -9,6 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <gdiplus.h>
+#include "AT3Tags.hpp"
 
 
 using namespace std;
@@ -65,5 +66,6 @@ private:
 	Color colorAssumed;
 	Color colorNotAssumed;
 	Color colorRedundant;
+	Color colorRouteDraw;
 };
 
