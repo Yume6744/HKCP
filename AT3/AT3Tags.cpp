@@ -12,6 +12,8 @@
 
 using namespace EuroScopePlugIn;
 
+unordered_map<string, bool> AT3Tags::showRouteDraw;
+
 AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR, COLORREF colorV) : CPlugIn(EuroScopePlugIn::COMPATIBILITY_CODE, MY_PLUGIN_NAME, MY_PLUGIN_VERSION, MY_PLUGIN_DEVELOPER, MY_PLUGIN_COPYRIGHT)
 {
 	RegisterTagItemType("AT3 Altitude", TAG_ITEM_AT3_ALTITUDE);
@@ -35,6 +37,7 @@ AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR, COLORREF co
 
 	RegisterTagItemFunction("AT3 Approach Selection Menu", TAG_FUNC_APP_SEL_MENU);
 	RegisterTagItemFunction("AT3 Route Selection Menu", TAG_FUNC_RTE_SEL_MENU);
+	RegisterTagItemFunction("AT3 Route Draw Toggle", TAG_FUNC_RTE_DRAW_TOGGLE);
 
 	colorAssumed = colorA;
 	colorNotAssumed = colorNA;
@@ -347,6 +350,8 @@ void AT3Tags::OnFunctionCall(int FunctionId, const char* sItemString, POINT Pt, 
 		return;
 	}
 
+	string callsign = FlightPlan.GetCallsign();
+
 	string dest = FlightPlan.GetFlightPlanData().GetDestination();
 	string destRunway = FlightPlan.GetFlightPlanData().GetArrivalRwy();
 	string STAR = FlightPlan.GetFlightPlanData().GetStarName();
@@ -462,7 +467,7 @@ void AT3Tags::OnFunctionCall(int FunctionId, const char* sItemString, POINT Pt, 
 		SetApp(7, FlightPlan, appsVec);
 		break;
 	}
-	case TAG_FUNC_RTE_SEL_MENU:
+	case TAG_FUNC_RTE_SEL_MENU: 
 		if (arptSet.find(FlightPlan.GetFlightPlanData().GetDestination()) != arptSet.end()) {
 			OpenPopupList(Area, RteMenuName.c_str(), 1);
 			if (rteVec.size() > 0) {
@@ -555,6 +560,16 @@ void AT3Tags::OnFunctionCall(int FunctionId, const char* sItemString, POINT Pt, 
 		}
 		case TAG_FUNC_RTE_SEL_ITEM_8: {
 			SetRte(7, FlightPlan, rteVec, dest, destRunway);
+			break;
+		}
+		case TAG_FUNC_RTE_DRAW_TOGGLE: {
+		
+			if (showRouteDraw.find(callsign) == showRouteDraw.end()) {
+				showRouteDraw.emplace(callsign, true);
+			}
+			else {
+				showRouteDraw[callsign] = !showRouteDraw[callsign];
+			}
 			break;
 		}
 	}

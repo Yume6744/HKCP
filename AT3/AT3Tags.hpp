@@ -6,6 +6,7 @@
 #include <string>
 #include <set>
 #include <iostream>
+#include <unordered_map>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include "MAESTROapi.h"
@@ -93,6 +94,8 @@ public:
 	string GetALRT(CFlightPlan& FlightPlan);
 
 	string GetWTG(CFlightPlan& FlightPlan);
+
+	static unordered_map<string, bool> showRouteDraw;
 
 protected:
 	int minu;
