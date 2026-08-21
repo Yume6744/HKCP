@@ -33,6 +33,8 @@ public:
 		int Button,
 		HKCPDisplay* Display);
 
+	void normalRouteDraw(CFlightPlan fp);
+
 	string GetControllerFreqFromId(string ID);
 
 	string GetControllerIdFromCallsign(string callsign);
@@ -53,5 +55,12 @@ private:
 	Color colorNotAssumed;
 	Color colorRedundant;
 	Color colorRouteDraw;
+	Color colorRouteDrawDCT;
+
+	double getDistance(POINT p1, POINT p2);
+
+	string formatRouteTag(CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt);
+
+	void createRouteDraw(CFlightPlan fp, POINT acftLocation, int drawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
 };
 

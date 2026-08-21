@@ -15,11 +15,12 @@ AT3RadarTargetDisplay::AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOff
 	colorNotAssumed.SetFromCOLORREF(colorNA);
 	colorRedundant.SetFromCOLORREF(colorR);
 	colorRouteDraw.SetFromCOLORREF(ROUTE_DRAW);
+	colorRouteDrawDCT.SetFromCOLORREF(ROUTE_DRAW_DCT);
 }
 
 void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 {
-	if (Phase != REFRESH_PHASE_BEFORE_TAGS) {
+	if (Phase != REFRESH_PHASE_AFTER_TAGS) {
 		return;
 	}
 
@@ -199,86 +200,43 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 
 		// Create route draw
 		if (AT3Tags::showRouteDraw[fp.GetCallsign()]) {
-			Pen routePen(colorRouteDraw, 1);
 			CFlightPlanExtractedRoute extractedRoute = fp.GetExtractedRoute();
-			int pointCount = extractedRoute.GetPointsNumber();
-			int nextPointID;
-			bool isFirstPoint = true;
-			bool isRAM = fp.GetRAMFlag();
-			POINT prevPoint;
 			POINT nextPoint;
-			const char* airway;
-			const char* nextPointName;
-			string routeTag;
-			string nextPointETA;
+			POINT prevPoint;
+			int pointCount = extractedRoute.GetPointsNumber();
+			bool isRAM;
+			int nextPointID;
+			int probeNextID = -1;
 
-			time_t curr_time;
-			curr_time = time(NULL);
-			tm* tm_gmt = gmtime(&curr_time);
+			for (int i = 0; i <= pointCount; i++) {
+				if (extractedRoute.GetPointDistanceInMinutes(i) != -1) {
+					probeNextID = i;
+					break;
+				}
+			}
 
-			dc.SetTextColor(colorRouteDraw.ToCOLORREF());
-
-			if (extractedRoute.GetPointsAssignedIndex() != -1) {
-				nextPointID = extractedRoute.GetPointsAssignedIndex();
-				airway = "";
+			nextPointID = extractedRoute.GetPointsCalculatedIndex();
+			prevPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID - 1));
+			nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
+			
+			if (getDistance(acftLocation, nextPoint) > getDistance(prevPoint, nextPoint)) {
+				isRAM = true;
 			}
 			else {
-				nextPointID = extractedRoute.GetPointsCalculatedIndex();
-				airway = extractedRoute.GetPointAirwayName(nextPointID);
+				isRAM = false;
 			}
 
-			for (nextPointID; nextPointID < pointCount; nextPointID++) {
-				nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
-
-				// 1. Get total raw minutes
-				int totalMinutes = tm_gmt->tm_min + extractedRoute.GetPointDistanceInMinutes(nextPointID);
-
-				// 2. Calculate correct hour and minute with wrapping
-				// Add the extra hours to current hour, then wrap at 24
-				int finalHour = (tm_gmt->tm_hour + (totalMinutes / 60)) % 24;
-				// Wrap minutes at 60
-				int finalMin = totalMinutes % 60;
-
-				// 3. Format with leading zeros ("%02d" means pad with zero to 2 digits)
-				char buf[5];
-				snprintf(buf, sizeof(buf), "%02d%02d", finalHour, finalMin);
-				nextPointETA = buf;
-
-				nextPointName = extractedRoute.GetPointName(nextPointID);
-				routeTag = string(nextPointName) + " " + nextPointETA;
-				CSize routeTagSize = dc.GetTextExtent(routeTag.c_str());
-
-				//If offroute, skip this iteration
-				if (isRAM) {
-					prevPoint = nextPoint;
-					isFirstPoint = false;
-					isRAM = false;
-				}//If next point is Airport, end the for loop
-				else if (std::string(nextPointName).length() == 4) {
-					break;
-				}//If is first point, draw from aircraft
-				else if (isFirstPoint) {
-					g.DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)nextPoint.x, (INT)nextPoint.y);							//Draw route line
-					dc.TextOutA(((INT)acftLocation.x + (INT)nextPoint.x) / 2, ((INT)acftLocation.y + (INT)nextPoint.y) / 2, airway);				//Write airway
-					g.DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);				//Draw Tag line up
-					g.DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);				//Draw Tag line horizontal
-					dc.TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());	//Draw Route Tag
-					prevPoint = nextPoint;
-					isFirstPoint = false;
-				}//Else draw point to point
-				else {
-					g.DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
-					dc.TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
-					g.DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);
-					g.DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);
-					dc.TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
-					prevPoint = nextPoint;
-				}
-
-				airway = extractedRoute.GetPointAirwayName(nextPointID + 1);
+			// If probing DCT, draw type 3If off-route, draw type 2
+			if (extractedRoute.GetPointsAssignedIndex() == -1 && nextPointID != probeNextID) {
+				createRouteDraw(fp, acftLocation, 3, nextPointID, probeNextID, &g, &dc, Display);
+			}// If off-route, draw type 2
+			else if (isRAM) {
+				createRouteDraw(fp, acftLocation, 2, nextPointID, probeNextID, &g, &dc, Display);
+			}// Else, draw type 1
+			else {
+				createRouteDraw(fp, acftLocation, 1, nextPointID, probeNextID, &g, &dc, Display);
 			}
 		}
-
 		// Increment to next aircraft
 		acft = GetPlugIn()->RadarTargetSelectNext(acft);
 	}
@@ -323,4 +281,179 @@ string AT3RadarTargetDisplay::GetControllerFreqFromId(string ID)
 string AT3RadarTargetDisplay::GetControllerIdFromCallsign(string callsign)
 {
 	return GetPlugIn()->ControllerSelect(callsign.c_str()).GetPositionId();
+}
+
+double AT3RadarTargetDisplay::getDistance(POINT p1, POINT p2) {
+	double dx = static_cast<double>(p1.x - p2.x);
+	double dy = static_cast<double>(p1.y - p2.y);
+	return std::hypot(dx, dy);
+}
+
+string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt){
+
+	const char* nextPointName;
+
+	int totalMinutes = tm_gmt->tm_min + extractedRoute.GetPointDistanceInMinutes(nextPointID);
+
+	// 2. Calculate correct hour and minute with wrapping
+	// Add the extra hours to current hour, then wrap at 24
+	int finalHour = (tm_gmt->tm_hour + (totalMinutes / 60)) % 24;
+	// Wrap minutes at 60
+	int finalMin = totalMinutes % 60;
+
+	// 3. Format with leading zeros ("%02d" means pad with zero to 2 digits)
+	char buf[5];
+	snprintf(buf, sizeof(buf), "%02d%02d", finalHour, finalMin);
+	string nextPointETA = buf;
+
+	nextPointName = extractedRoute.GetPointName(nextPointID);
+	return string(nextPointName) + " " + nextPointETA;
+}
+
+void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, int drawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display) {
+	SolidBrush wptBrush(colorRouteDraw);
+	Pen routePen(colorRouteDraw, 1);
+	dc->SetTextColor(colorRouteDraw.ToCOLORREF());
+	CFlightPlanExtractedRoute extractedRoute = fp.GetExtractedRoute();
+	int pointCount = extractedRoute.GetPointsNumber();
+	POINT prevPoint;
+	POINT nextPoint;
+	POINT probeNext;
+	bool isFirstPoint = true;
+	const char* airway;
+	string routeTag;
+
+	time_t curr_time;
+	curr_time = time(NULL);
+	tm* tm_gmt = gmtime(&curr_time);
+
+	prevPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID - 1));
+	nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
+	probeNext = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(probeNextID));
+
+	for (nextPointID; nextPointID < pointCount; nextPointID++) {
+		nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
+
+		if (drawType == 1) {
+			if (isFirstPoint && extractedRoute.GetPointsAssignedIndex() != -1) {
+				airway = "";
+			}
+			else {
+				airway = extractedRoute.GetPointAirwayName(nextPointID);
+			}
+		}
+		else if (drawType == 2) {
+			airway = extractedRoute.GetPointAirwayName(nextPointID);
+		}
+		else if (drawType == 3 || drawType == 4) {
+			airway = extractedRoute.GetPointAirwayName(nextPointID);
+		}
+		else {
+			airway = extractedRoute.GetPointAirwayName(nextPointID);
+		}
+
+		routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+		CSize routeTagSize = dc->GetTextExtent(routeTag.c_str());
+
+		// Type 1: Normal route draw (start from aircraft to next point)
+		if (drawType == 1) {
+			if (extractedRoute.GetPointDistanceInMinutes(nextPointID) == -1 || std::string(extractedRoute.GetPointName(nextPointID)).length() == 4) {
+				prevPoint = nextPoint;
+				continue;
+			}
+			else if (isFirstPoint) {
+				g->DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)nextPoint.x, (INT)nextPoint.y);							//Draw route line
+				dc->TextOutA(((INT)acftLocation.x + (INT)nextPoint.x) / 2, ((INT)acftLocation.y + (INT)nextPoint.y) / 2, airway);				//Write airway
+				g->DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);				//Draw Tag line up
+				g->DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);				//Draw Tag line horizontal
+				dc->TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());	//Draw Route Tag
+				isFirstPoint = false;
+			}//Else draw point to point
+			else {
+				g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
+				dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+				g->DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);
+				g->DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);
+				dc->TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+			}
+		}
+		// Type 2: Off route - Draw from previous point to end
+		if (drawType == 2) {
+			if (std::string(extractedRoute.GetPointName(nextPointID)).length() == 4) {
+				prevPoint = nextPoint;
+				continue;
+			}
+			else if (isFirstPoint) {
+				g->DrawLine(&routePen, (INT)prevPoint.x + 2, (INT)prevPoint.y - 6, (INT)prevPoint.x + 22, (INT)prevPoint.y - 66);
+				g->DrawLine(&routePen, (INT)prevPoint.x + 22, (INT)prevPoint.y - 66, (INT)prevPoint.x + 32, (INT)prevPoint.y - 66);
+				dc->TextOutA((INT)prevPoint.x + 42 + (routeTagSize.cx / 2), (INT)prevPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+			}
+			g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
+			dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+			g->DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);
+			g->DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);
+			dc->TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+		}
+		// Type 3: Probing DCT - Draw from previous point to end + Draw from aircraft to prev and next point
+		if (drawType == 3) {
+			wptBrush.SetColor(colorRouteDrawDCT);
+			routePen.SetColor(colorRouteDrawDCT);
+			dc->SetTextColor(colorRouteDrawDCT.ToCOLORREF());
+			g->DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)probeNext.x, (INT)probeNext.y);
+			g->DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)prevPoint.x, (INT)prevPoint.y);
+			dc->TextOutA(((INT)acftLocation.x + (INT)prevPoint.x) / 2, ((INT)acftLocation.y + (INT)prevPoint.y) / 2, "DCT");
+			dc->TextOutA(((INT)acftLocation.x + (INT)probeNext.x) / 2, ((INT)acftLocation.y + (INT)probeNext.y) / 2, "DCT");
+
+			routeTag = formatRouteTag(extractedRoute, probeNextID, tm_gmt);
+			routeTagSize = dc->GetTextExtent(routeTag.c_str());
+
+			g->DrawLine(&routePen, (INT)probeNext.x + 2, (INT)probeNext.y - 6, (INT)probeNext.x + 22, (INT)probeNext.y - 66);
+			g->DrawLine(&routePen, (INT)probeNext.x + 22, (INT)probeNext.y - 66, (INT)probeNext.x + 32, (INT)probeNext.y - 66);
+			dc->TextOutA((INT)probeNext.x + 42 + (routeTagSize.cx / 2), (INT)probeNext.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+
+			routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
+			routeTagSize = dc->GetTextExtent(routeTag.c_str());
+
+			g->DrawLine(&routePen, (INT)prevPoint.x + 2, (INT)prevPoint.y - 6, (INT)prevPoint.x + 22, (INT)prevPoint.y - 66);
+			g->DrawLine(&routePen, (INT)prevPoint.x + 22, (INT)prevPoint.y - 66, (INT)prevPoint.x + 32, (INT)prevPoint.y - 66);
+			dc->TextOutA((INT)prevPoint.x + 42 + (routeTagSize.cx / 2), (INT)prevPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+
+			// Draw BMW logo
+			routePen.SetWidth(2);
+			g->DrawEllipse(&routePen, prevPoint.x - 6, prevPoint.y - 6, 11, 11);
+			g->DrawEllipse(&routePen, probeNext.x - 6, probeNext.y - 6, 11, 11);
+			g->FillPie(&wptBrush, prevPoint.x - 6, prevPoint.y - 6, 11, 11, 0, 90);
+			g->FillPie(&wptBrush, prevPoint.x - 6, prevPoint.y - 6, 11, 11, 180, 90);
+			g->FillPie(&wptBrush, probeNext.x - 6, probeNext.y - 6, 11, 11, 0, 90);
+			g->FillPie(&wptBrush, probeNext.x - 6, probeNext.y - 6, 11, 11, 180, 90);
+				
+			wptBrush.SetColor(colorRouteDraw);
+			routePen.SetColor(colorRouteDraw);
+			routePen.SetWidth(1);
+			dc->SetTextColor(colorRouteDraw.ToCOLORREF());
+			drawType = 4;
+		}
+		//Type 4: continue of type 3;
+		if (drawType == 4) {
+			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+			routeTagSize = dc->GetTextExtent(routeTag.c_str());
+
+			if (std::string(extractedRoute.GetPointName(nextPointID)).length() == 4) {
+				prevPoint = nextPoint;
+				continue;
+			}
+			airway = extractedRoute.GetPointAirwayName(nextPointID);
+			g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
+			dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+			if (nextPointID == probeNextID) {
+				prevPoint = nextPoint;
+				continue;
+			}
+
+			g->DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);
+			g->DrawLine(&routePen, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66, (INT)nextPoint.x + 32, (INT)nextPoint.y - 66);
+			dc->TextOutA((INT)nextPoint.x + 42 + (routeTagSize.cx / 2), (INT)nextPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+		}
+		prevPoint = nextPoint;
+	}
 }
