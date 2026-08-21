@@ -151,7 +151,7 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 		dc.SetTextAlign(TA_CENTER);
 		CSize CJSLabelSize;
 
-		if (fp.GetState() != FLIGHT_PLAN_STATE_ASSUMED && CJSLabelShowWhenTracked) {
+		if (fp.GetState() != FLIGHT_PLAN_STATE_ASSUMED || CJSLabelShowWhenTracked) {
 			// Set CJS label text to CJS or frequency based on saved state
 			string CJSLabelText;
 			CJSLabelShowFreq.emplace(fp.GetCallsign(), false);
