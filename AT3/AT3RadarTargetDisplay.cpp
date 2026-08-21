@@ -201,8 +201,6 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 		// Create route draw
 		if (AT3Tags::showRouteDraw[fp.GetCallsign()]) {
 			CFlightPlanExtractedRoute extractedRoute = fp.GetExtractedRoute();
-			POINT nextPoint;
-			POINT prevPoint;
 			int pointCount = extractedRoute.GetPointsNumber();
 			bool isRAM;
 			int nextPointID;
@@ -216,19 +214,24 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 			}
 
 			nextPointID = extractedRoute.GetPointsCalculatedIndex();
-			prevPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID - 1));
-			nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
+			CPosition acftCoor = acft.GetPosition().GetPosition();
+			CPosition prevPointCoor = extractedRoute.GetPointPosition(nextPointID - 1);
+			CPosition nextPointCoor = extractedRoute.GetPointPosition(nextPointID);
 			
-			if (getDistance(acftLocation, nextPoint) > getDistance(prevPoint, nextPoint)) {
+			if ((acftCoor.DistanceTo(prevPointCoor) + acftCoor.DistanceTo(nextPointCoor) - 2) > nextPointCoor.DistanceTo(prevPointCoor)) {
 				isRAM = true;
 			}
 			else {
 				isRAM = false;
 			}
 
-			// If probing DCT, draw type 3If off-route, draw type 2
+			// If probing DCT, draw type 3
 			if (extractedRoute.GetPointsAssignedIndex() == -1 && nextPointID != probeNextID) {
 				createRouteDraw(fp, acftLocation, 3, nextPointID, probeNextID, &g, &dc, Display);
+			}// If has assigned DCT, draw type 1
+			else if (extractedRoute.GetPointsAssignedIndex() != -1 ){
+				nextPointID = extractedRoute.GetPointsAssignedIndex();
+				createRouteDraw(fp, acftLocation, 1, nextPointID, probeNextID, &g, &dc, Display);
 			}// If off-route, draw type 2
 			else if (isRAM) {
 				createRouteDraw(fp, acftLocation, 2, nextPointID, probeNextID, &g, &dc, Display);
@@ -281,12 +284,6 @@ string AT3RadarTargetDisplay::GetControllerFreqFromId(string ID)
 string AT3RadarTargetDisplay::GetControllerIdFromCallsign(string callsign)
 {
 	return GetPlugIn()->ControllerSelect(callsign.c_str()).GetPositionId();
-}
-
-double AT3RadarTargetDisplay::getDistance(POINT p1, POINT p2) {
-	double dx = static_cast<double>(p1.x - p2.x);
-	double dy = static_cast<double>(p1.y - p2.y);
-	return std::hypot(dx, dy);
 }
 
 string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt){
@@ -384,10 +381,17 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 				continue;
 			}
 			else if (isFirstPoint) {
+				routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
+				routeTagSize = dc->GetTextExtent(routeTag.c_str());
+
 				g->DrawLine(&routePen, (INT)prevPoint.x + 2, (INT)prevPoint.y - 6, (INT)prevPoint.x + 22, (INT)prevPoint.y - 66);
 				g->DrawLine(&routePen, (INT)prevPoint.x + 22, (INT)prevPoint.y - 66, (INT)prevPoint.x + 32, (INT)prevPoint.y - 66);
 				dc->TextOutA((INT)prevPoint.x + 42 + (routeTagSize.cx / 2), (INT)prevPoint.y - 66 - (routeTagSize.cy / 2), routeTag.c_str());
+				isFirstPoint = false;
 			}
+			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+			routeTagSize = dc->GetTextExtent(routeTag.c_str());
+
 			g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
 			dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
 			g->DrawLine(&routePen, (INT)nextPoint.x + 2, (INT)nextPoint.y - 6, (INT)nextPoint.x + 22, (INT)nextPoint.y - 66);
