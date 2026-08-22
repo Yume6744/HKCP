@@ -10,10 +10,32 @@
 #include <gdiplus.h>
 #include "AT3Tags.hpp"
 
+namespace DrawRouteUI {
+	enum DrawType {
+		DRAW_ROUTE_TYPE_REGULAR,
+		DRAW_ROUTE_TYPE_OFF_ROUTE,
+		DRAW_ROUTE_TYPE_PROBE_DCT,
+		DRAW_ROUTE_TYPE_PROBE_DCT_NORMAL
+	};
+
+	// Leader line offsets
+	const int LeaderStartX = 2;
+	const int LeaderStartY = -6;
+	const int LeaderElbowX = 22;
+	const int LeaderElbowY = -66;
+	const int LeaderEndX = 32;
+	const int LeaderEndY = -66;
+	const int TextOffsetX = 42;
+
+	// Symbol layout (BMW Logo)
+	const int SymbolSize = 12;
+	const int SymbolRadius = SymbolSize / 2; // 5
+}
 
 using namespace std;
 using namespace EuroScopePlugIn;
 using namespace Gdiplus;
+using namespace DrawRouteUI;
 
 class HKCPDisplay;
 class HKCPPlugin;
@@ -59,6 +81,6 @@ private:
 
 	string formatRouteTag(CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt);
 
-	void createRouteDraw(CFlightPlan fp, POINT acftLocation, int drawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
+	void createRouteDraw(CFlightPlan fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
 };
 
