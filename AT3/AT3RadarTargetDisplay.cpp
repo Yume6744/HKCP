@@ -537,6 +537,13 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 	nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 	probeNext = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(probeNextID));
 
+	// Allow CDC content to clip
+	CRect allowedArea(0, Display->GetToolbarArea().bottom + TopSky_ToolbarHeight, 99999, 99999);
+
+	auto SafeTextOut = [&](int x, int y, const char* text) {
+		dc->ExtTextOutA(x, y, ETO_CLIPPED, &allowedArea, text, strlen(text), NULL);
+		};
+
 	for (nextPointID; nextPointID < pointCount; nextPointID++) {
 		nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 
