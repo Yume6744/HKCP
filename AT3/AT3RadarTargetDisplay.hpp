@@ -28,7 +28,7 @@ namespace DrawRouteUI {
 	const int TextOffsetX = 42;
 
 	// Symbol layout (BMW Logo)
-	const int SymbolSize = 12;
+	const int SymbolSize = 11;
 	const int SymbolRadius = SymbolSize / 2; // 5
 
 	const int TopSky_ToolbarHeight = 21;
