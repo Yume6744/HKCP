@@ -31,9 +31,14 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 
 	// Save context for later
 	int sDC = dc.SaveDC();
+	
+	// Setup exclusion zone for CDC
+	dc.ExcludeClipRect(0, 0, 9999, Display->GetToolbarArea().bottom + TopSky_ToolbarHeight);
 
 	// Create graphics object
 	Graphics g(hDC);
+
+	GraphicsState gState = g.Save();
 
 	// Create font
 	CFont EuroScopeFont;
@@ -190,7 +195,7 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 					CJSLabelText.pop_back();
 				}
 			}
-			dc.TextOutA(acftLocation.x, acftLocation.y - CJSLabelOffset, CJSLabelText.c_str());
+			dc.ExtTextOutA(acftLocation.x, acftLocation.y - CJSLabelOffset, ETO_CLIPPED, CRect(0, Display->GetToolbarArea().bottom + TopSky_ToolbarHeight, 9999, 9999), CJSLabelText.c_str(), CJSLabelText.length(), NULL);
 
 			// Create rectangle around CJS label for click spot
 			CJSLabelSize = dc.GetTextExtent(CJSLabelText.c_str());
@@ -245,6 +250,7 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 		acft = GetPlugIn()->RadarTargetSelectNext(acft);
 	}
 
+	g.Restore(gState);
 	// Restore context
 	dc.RestoreDC(sDC);
 
@@ -329,6 +335,13 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 	nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 	probeNext = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(probeNextID));
 
+	// Allow CDC content to clip
+	CRect allowedArea(0, Display->GetToolbarArea().bottom + TopSky_ToolbarHeight, 99999, 99999);
+
+	auto SafeTextOut = [&](int x, int y, const char* text) {
+		dc->ExtTextOutA(x, y, ETO_CLIPPED, &allowedArea, text, strlen(text), NULL);
+		};
+
 	for (nextPointID; nextPointID < pointCount; nextPointID++) {
 		nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 
@@ -361,18 +374,18 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 			}
 			else if (isFirstPoint) {
 				g->DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)nextPoint.x, (INT)nextPoint.y);							//Draw route line
-				dc->TextOutA(((INT)acftLocation.x + (INT)nextPoint.x) / 2, ((INT)acftLocation.y + (INT)nextPoint.y) / 2, airway);				//Write airway
+				SafeTextOut(((INT)acftLocation.x + (INT)nextPoint.x) / 2, ((INT)acftLocation.y + (INT)nextPoint.y) / 2, airway);				//Write airway
 				g->DrawLine(&routePen, (INT)nextPoint.x + LeaderStartX, (INT)nextPoint.y + LeaderStartY, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderEndY);				//Draw Tag line up
 				g->DrawLine(&routePen, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderElbowY, (INT)nextPoint.x + LeaderEndX, (INT)nextPoint.y + LeaderEndY);				//Draw Tag line horizontal
-				dc->TextOutA((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());	//Draw Route Tag
+				SafeTextOut((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());	//Draw Route Tag
 				isFirstPoint = false;
 			}//Else draw point to point
 			else {
 				g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
-				dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+				SafeTextOut(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
 				g->DrawLine(&routePen, (INT)nextPoint.x + LeaderStartX, (INT)nextPoint.y + LeaderStartY, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderEndY);
 				g->DrawLine(&routePen, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderElbowY, (INT)nextPoint.x + LeaderEndX, (INT)nextPoint.y + LeaderEndY);
-				dc->TextOutA((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
+				SafeTextOut((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 			}
 		}
 		// Type 2: Off route - Draw from previous point to end
@@ -387,17 +400,17 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 
 				g->DrawLine(&routePen, (INT)prevPoint.x + LeaderStartX, (INT)prevPoint.y + LeaderStartY, (INT)prevPoint.x + LeaderElbowX, (INT)prevPoint.y + LeaderEndY);
 				g->DrawLine(&routePen, (INT)prevPoint.x + LeaderElbowX, (INT)prevPoint.y + LeaderElbowY, (INT)prevPoint.x + LeaderEndX, (INT)prevPoint.y + LeaderEndY);
-				dc->TextOutA((INT)prevPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)prevPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
+				SafeTextOut((INT)prevPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)prevPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 				isFirstPoint = false;
 			}
 			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
-			dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+			SafeTextOut(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
 			g->DrawLine(&routePen, (INT)nextPoint.x + LeaderStartX, (INT)nextPoint.y + LeaderStartY, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderEndY);
 			g->DrawLine(&routePen, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderElbowY, (INT)nextPoint.x + LeaderEndX, (INT)nextPoint.y + LeaderEndY);
-			dc->TextOutA((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
+			SafeTextOut((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 		}
 		// Type 3: Probing DCT - Draw from previous point to end + Draw from aircraft to prev and next point
 		if (DrawType == DRAW_ROUTE_TYPE_PROBE_DCT) {
@@ -406,22 +419,22 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 			dc->SetTextColor(colorRouteDrawDCT.ToCOLORREF());
 			g->DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)probeNext.x, (INT)probeNext.y);
 			g->DrawLine(&routePen, (INT)acftLocation.x, (INT)acftLocation.y, (INT)prevPoint.x, (INT)prevPoint.y);
-			dc->TextOutA(((INT)acftLocation.x + (INT)prevPoint.x) / 2, ((INT)acftLocation.y + (INT)prevPoint.y) / 2, "DCT");
-			dc->TextOutA(((INT)acftLocation.x + (INT)probeNext.x) / 2, ((INT)acftLocation.y + (INT)probeNext.y) / 2, "DCT");
+			SafeTextOut(((INT)acftLocation.x + (INT)prevPoint.x) / 2, ((INT)acftLocation.y + (INT)prevPoint.y) / 2, "DCT");
+			SafeTextOut(((INT)acftLocation.x + (INT)probeNext.x) / 2, ((INT)acftLocation.y + (INT)probeNext.y) / 2, "DCT");
 
 			routeTag = formatRouteTag(extractedRoute, probeNextID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			g->DrawLine(&routePen, (INT)probeNext.x + LeaderStartX, (INT)probeNext.y + LeaderStartY, (INT)probeNext.x + LeaderElbowX, (INT)probeNext.y + LeaderEndY);
 			g->DrawLine(&routePen, (INT)probeNext.x + LeaderElbowX, (INT)probeNext.y + LeaderElbowY, (INT)probeNext.x + LeaderEndX, (INT)probeNext.y + LeaderEndY);
-			dc->TextOutA((INT)probeNext.x + TextOffsetX + (routeTagSize.cx / 2), (INT)probeNext.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
+			SafeTextOut((INT)probeNext.x + TextOffsetX + (routeTagSize.cx / 2), (INT)probeNext.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 
 			routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			g->DrawLine(&routePen, (INT)prevPoint.x + LeaderStartX, (INT)prevPoint.y + LeaderStartY, (INT)prevPoint.x + LeaderElbowX, (INT)prevPoint.y + LeaderEndY);
 			g->DrawLine(&routePen, (INT)prevPoint.x + LeaderElbowX, (INT)prevPoint.y + LeaderElbowY, (INT)prevPoint.x + LeaderEndX, (INT)prevPoint.y + LeaderEndY);
-			dc->TextOutA((INT)prevPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)prevPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
+			SafeTextOut((INT)prevPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)prevPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 
 			// Draw BMW logo
 			routePen.SetWidth(2);
@@ -449,7 +462,7 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 			}
 			airway = extractedRoute.GetPointAirwayName(nextPointID);
 			g->DrawLine(&routePen, (INT)prevPoint.x, (INT)prevPoint.y, (INT)nextPoint.x, (INT)nextPoint.y);
-			dc->TextOutA(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
+			SafeTextOut(((INT)prevPoint.x + (INT)nextPoint.x) / 2, ((INT)prevPoint.y + (INT)nextPoint.y) / 2, airway);
 			if (nextPointID == probeNextID) {
 				prevPoint = nextPoint;
 				continue;
@@ -457,7 +470,7 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 
 			g->DrawLine(&routePen, (INT)nextPoint.x + LeaderStartX, (INT)nextPoint.y + LeaderStartY, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderEndY);
 			g->DrawLine(&routePen, (INT)nextPoint.x + LeaderElbowX, (INT)nextPoint.y + LeaderElbowY, (INT)nextPoint.x + LeaderEndX, (INT)nextPoint.y + LeaderEndY);
-			dc->TextOutA((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
+			SafeTextOut((INT)nextPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)nextPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 		}
 		prevPoint = nextPoint;
 	}

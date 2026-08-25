@@ -30,6 +30,8 @@ namespace DrawRouteUI {
 	// Symbol layout (BMW Logo)
 	const int SymbolSize = 12;
 	const int SymbolRadius = SymbolSize / 2; // 5
+
+	const int TopSky_ToolbarHeight = 21;
 }
 
 using namespace std;
