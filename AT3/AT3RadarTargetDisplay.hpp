@@ -83,6 +83,12 @@ private:
 
 	string formatRouteTag(CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt);
 
+	void drawRouteLine(Graphics* g, Pen& pen, POINT point1, POINT point2);
+
+	void drawWPTKink(Graphics* g, Pen& pen, POINT point);
+
+	void drawWPTSelectSymbol(Graphics* g, CDC* dc, Pen& pen, SolidBrush& Brush, POINT point);
+
 	void createRouteDraw(CFlightPlan fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
 };
 
