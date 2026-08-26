@@ -295,13 +295,13 @@ string AT3RadarTargetDisplay::GetControllerIdFromCallsign(string callsign)
 	return GetPlugIn()->ControllerSelect(callsign.c_str()).GetPositionId();
 }
 
-string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute* extractedRoute, int nextPointID, tm* tm_gmt) const {
+string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute& extractedRoute, int nextPointID, tm* tm_gmt) const {
 
 	const char* nextPointName;
 	int totalMinutes;
 
-	if (extractedRoute->GetPointDistanceInMinutes(nextPointID) != -1) {
-		totalMinutes = tm_gmt->tm_min + extractedRoute->GetPointDistanceInMinutes(nextPointID);
+	if (extractedRoute.GetPointDistanceInMinutes(nextPointID) != -1) {
+		totalMinutes = tm_gmt->tm_min + extractedRoute.GetPointDistanceInMinutes(nextPointID);
 	}
 	else {
 		totalMinutes = tm_gmt->tm_min;
@@ -318,7 +318,7 @@ string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute* extract
 	snprintf(buf, sizeof(buf), "%02d%02d", finalHour, finalMin);
 	string nextPointETA = buf;
 
-	nextPointName = extractedRoute->GetPointName(nextPointID);
+	nextPointName = extractedRoute.GetPointName(nextPointID);
 	return string(nextPointName) + " " + nextPointETA;
 }
 
@@ -379,7 +379,7 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 			airway = extractedRoute.GetPointAirwayName(nextPointID);
 		}
 
-		routeTag = formatRouteTag(&extractedRoute, nextPointID, tm_gmt);
+		routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
 		CSize routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 		// Type 1: Normal route draw (start from aircraft to next point)
@@ -409,14 +409,14 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 				continue;
 			}
 			else if (isFirstPoint) {
-				routeTag = formatRouteTag(&extractedRoute, nextPointID - 1, tm_gmt);
+				routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
 				routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 				drawWPTKink(g, routePen, prevPoint);
 				drawRouteText(dc, Display, (INT)prevPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)prevPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 				isFirstPoint = false;
 			}
-			routeTag = formatRouteTag(&extractedRoute, nextPointID, tm_gmt);
+			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			drawRouteLine(g, routePen, prevPoint, nextPoint);
@@ -434,13 +434,13 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 			drawRouteText(dc, Display, ((INT)acftLocation.x + (INT)prevPoint.x) / 2, ((INT)acftLocation.y + (INT)prevPoint.y) / 2, "DCT");
 			drawRouteText(dc, Display, ((INT)acftLocation.x + (INT)probeNext.x) / 2, ((INT)acftLocation.y + (INT)probeNext.y) / 2, "DCT");
 
-			routeTag = formatRouteTag(&extractedRoute, probeNextID, tm_gmt);
+			routeTag = formatRouteTag(extractedRoute, probeNextID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			drawWPTKink(g, routePen, probeNext);
 			drawRouteText(dc, Display, (INT)probeNext.x + TextOffsetX + (routeTagSize.cx / 2), (INT)probeNext.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 
-			routeTag = formatRouteTag(&extractedRoute, nextPointID - 1, tm_gmt);
+			routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			drawWPTKink(g, routePen, prevPoint);
@@ -459,7 +459,7 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 		}
 		//Type 4: continue of type 3;
 		if (DrawType == DRAW_ROUTE_TYPE_PROBE_DCT_NORMAL) {
-			routeTag = formatRouteTag(&extractedRoute, nextPointID, tm_gmt);
+			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			if (std::string(extractedRoute.GetPointName(nextPointID)).length() == 4 && nextPointID == pointCount - 1) {
