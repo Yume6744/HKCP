@@ -81,7 +81,7 @@ private:
 	Color colorRouteDraw;
 	Color colorRouteDrawDCT;
 
-	string formatRouteTag(CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt);
+	string formatRouteTag(CFlightPlanExtractedRoute* extractedRoute, int nextPointID, tm* tm_gmt) const;
 
 	void drawRouteLine(Graphics* g, Pen& pen, POINT point1, POINT point2);
 
@@ -91,6 +91,6 @@ private:
 
 	void drawRouteText(CDC* dc, HKCPDisplay* Display, int x, int y, const char* text);
 
-	void createRouteDraw(CFlightPlan fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
+	void createRouteDraw(CFlightPlan* fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
 };
 

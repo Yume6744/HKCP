@@ -233,17 +233,17 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 
 			// If probing DCT, draw type 3
 			if (extractedRoute.GetPointsAssignedIndex() == -1 && nextPointID != probeNextID) {
-				createRouteDraw(fp, acftLocation, DRAW_ROUTE_TYPE_PROBE_DCT, nextPointID, probeNextID, &g, &dc, Display);
+				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_PROBE_DCT, nextPointID, probeNextID, &g, &dc, Display);
 			}// If has assigned DCT, draw type 1
 			else if (extractedRoute.GetPointsAssignedIndex() != -1 ){
 				nextPointID = extractedRoute.GetPointsAssignedIndex();
-				createRouteDraw(fp, acftLocation, DRAW_ROUTE_TYPE_REGULAR, nextPointID, probeNextID, &g, &dc, Display);
+				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_REGULAR, nextPointID, probeNextID, &g, &dc, Display);
 			}// If off-route, draw type 2
 			else if (isRAM) {
-				createRouteDraw(fp, acftLocation, DRAW_ROUTE_TYPE_OFF_ROUTE, nextPointID, probeNextID, &g, &dc, Display);
+				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_OFF_ROUTE, nextPointID, probeNextID, &g, &dc, Display);
 			}// Else, draw type 1
 			else {
-				createRouteDraw(fp, acftLocation, DRAW_ROUTE_TYPE_REGULAR, nextPointID, probeNextID, &g, &dc, Display);
+				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_REGULAR, nextPointID, probeNextID, &g, &dc, Display);
 			}
 		}
 		// Increment to next aircraft
@@ -293,11 +293,11 @@ string AT3RadarTargetDisplay::GetControllerIdFromCallsign(string callsign)
 	return GetPlugIn()->ControllerSelect(callsign.c_str()).GetPositionId();
 }
 
-string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt){
+string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute* extractedRoute, int nextPointID, tm* tm_gmt) const {
 
 	const char* nextPointName;
 
-	int totalMinutes = tm_gmt->tm_min + extractedRoute.GetPointDistanceInMinutes(nextPointID);
+	int totalMinutes = tm_gmt->tm_min + extractedRoute->GetPointDistanceInMinutes(nextPointID);
 
 	// 2. Calculate correct hour and minute with wrapping
 	// Add the extra hours to current hour, then wrap at 24
@@ -310,7 +310,7 @@ string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute extracte
 	snprintf(buf, sizeof(buf), "%02d%02d", finalHour, finalMin);
 	string nextPointETA = buf;
 
-	nextPointName = extractedRoute.GetPointName(nextPointID);
+	nextPointName = extractedRoute->GetPointName(nextPointID);
 	return string(nextPointName) + " " + nextPointETA;
 }
 
@@ -335,11 +335,11 @@ void AT3RadarTargetDisplay::drawRouteText(CDC* dc, HKCPDisplay* Display, int x, 
 	dc->ExtTextOutA(x, y, ETO_CLIPPED, &allowedArea, text, strlen(text), NULL);
 }
 
-void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display) {
+void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display) {
 	SolidBrush wptBrush(colorRouteDraw);
 	Pen routePen(colorRouteDraw, 1);
 	dc->SetTextColor(colorRouteDraw.ToCOLORREF());
-	CFlightPlanExtractedRoute extractedRoute = fp.GetExtractedRoute();
+	CFlightPlanExtractedRoute extractedRoute = fp->GetExtractedRoute();
 	int pointCount = extractedRoute.GetPointsNumber();
 	POINT prevPoint;
 	POINT nextPoint;
@@ -371,7 +371,7 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 			airway = extractedRoute.GetPointAirwayName(nextPointID);
 		}
 
-		routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+		routeTag = formatRouteTag(&extractedRoute, nextPointID, tm_gmt);
 		CSize routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 		// Type 1: Normal route draw (start from aircraft to next point)
@@ -401,14 +401,14 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 				continue;
 			}
 			else if (isFirstPoint) {
-				routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
+				routeTag = formatRouteTag(&extractedRoute, nextPointID - 1, tm_gmt);
 				routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 				drawWPTKink(g, routePen, prevPoint);
 				drawRouteText(dc, Display, (INT)prevPoint.x + TextOffsetX + (routeTagSize.cx / 2), (INT)prevPoint.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 				isFirstPoint = false;
 			}
-			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+			routeTag = formatRouteTag(&extractedRoute, nextPointID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			drawRouteLine(g, routePen, prevPoint, nextPoint);
@@ -426,13 +426,13 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 			drawRouteText(dc, Display, ((INT)acftLocation.x + (INT)prevPoint.x) / 2, ((INT)acftLocation.y + (INT)prevPoint.y) / 2, "DCT");
 			drawRouteText(dc, Display, ((INT)acftLocation.x + (INT)probeNext.x) / 2, ((INT)acftLocation.y + (INT)probeNext.y) / 2, "DCT");
 
-			routeTag = formatRouteTag(extractedRoute, probeNextID, tm_gmt);
+			routeTag = formatRouteTag(&extractedRoute, probeNextID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			drawWPTKink(g, routePen, probeNext);
 			drawRouteText(dc, Display, (INT)probeNext.x + TextOffsetX + (routeTagSize.cx / 2), (INT)probeNext.y + LeaderEndY - (routeTagSize.cy / 2), routeTag.c_str());
 
-			routeTag = formatRouteTag(extractedRoute, nextPointID - 1, tm_gmt);
+			routeTag = formatRouteTag(&extractedRoute, nextPointID - 1, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			drawWPTKink(g, routePen, prevPoint);
@@ -451,7 +451,7 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 		}
 		//Type 4: continue of type 3;
 		if (DrawType == DRAW_ROUTE_TYPE_PROBE_DCT_NORMAL) {
-			routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+			routeTag = formatRouteTag(&extractedRoute, nextPointID, tm_gmt);
 			routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 			if (std::string(extractedRoute.GetPointName(nextPointID)).length() == 4 && nextPointID == pointCount - 1) {
