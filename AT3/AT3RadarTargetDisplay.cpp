@@ -492,7 +492,7 @@ string AT3RadarTargetDisplay::formatRouteTag(CFlightPlanExtractedRoute& extracte
 	snprintf(buf, sizeof(buf), "%02d%02d", finalHour, finalMin);
 	string nextPointETA = buf;
 
-	nextPointName = extractedRoute->GetPointName(nextPointID);
+	nextPointName = extractedRoute.GetPointName(nextPointID);
 	return string(nextPointName) + " " + nextPointETA;
 }
 

@@ -95,7 +95,7 @@ private:
 	Color colorRouteDraw;
 	Color colorRouteDrawDCT;
 
-	string formatRouteTag(CFlightPlanExtractedRoute* extractedRoute, int nextPointID, tm* tm_gmt) const;
+	string formatRouteTag(CFlightPlanExtractedRoute& extractedRoute, int nextPointID, tm* tm_gmt) const;
 
 	void drawRouteLine(Graphics* g, Pen& pen, POINT point1, POINT point2);
 
