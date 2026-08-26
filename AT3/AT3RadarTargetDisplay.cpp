@@ -298,8 +298,14 @@ string AT3RadarTargetDisplay::GetControllerIdFromCallsign(string callsign)
 string AT3RadarTargetDisplay::formatRouteTag (CFlightPlanExtractedRoute* extractedRoute, int nextPointID, tm* tm_gmt) const {
 
 	const char* nextPointName;
+	int totalMinutes;
 
-	int totalMinutes = tm_gmt->tm_min + extractedRoute->GetPointDistanceInMinutes(nextPointID);
+	if (extractedRoute->GetPointDistanceInMinutes(nextPointID) != -1) {
+		totalMinutes = tm_gmt->tm_min + extractedRoute->GetPointDistanceInMinutes(nextPointID);
+	}
+	else {
+		totalMinutes = tm_gmt->tm_min;
+	}
 
 	// 2. Calculate correct hour and minute with wrapping
 	// Add the extra hours to current hour, then wrap at 24
