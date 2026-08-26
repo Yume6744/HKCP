@@ -219,12 +219,17 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 				}
 			}
 
-			nextPointID = extractedRoute.GetPointsCalculatedIndex();
+			if (extractedRoute.GetPointsAssignedIndex() != -1) {
+				nextPointID = extractedRoute.GetPointsAssignedIndex();
+			}
+			else {
+				nextPointID = extractedRoute.GetPointsCalculatedIndex();
+			}
 			CPosition acftCoor = acft.GetPosition().GetPosition();
 			CPosition prevPointCoor = extractedRoute.GetPointPosition(nextPointID - 1);
 			CPosition nextPointCoor = extractedRoute.GetPointPosition(nextPointID);
 			
-			if ((acftCoor.DistanceTo(prevPointCoor) + acftCoor.DistanceTo(nextPointCoor) - 2) > nextPointCoor.DistanceTo(prevPointCoor)) {
+			if (extractedRoute.GetPointsAssignedIndex() == -1 && (acftCoor.DistanceTo(prevPointCoor) + acftCoor.DistanceTo(nextPointCoor) - 2) > nextPointCoor.DistanceTo(prevPointCoor)) {
 				isRAM = true;
 			}
 			else {
@@ -232,12 +237,9 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 			}
 
 			// If probing DCT, draw type 3
-			if (extractedRoute.GetPointsAssignedIndex() == -1 && nextPointID != probeNextID) {
+			if (nextPointID != probeNextID) {
+				nextPointID = extractedRoute.GetPointsCalculatedIndex();
 				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_PROBE_DCT, nextPointID, probeNextID, &g, &dc, Display);
-			}// If has assigned DCT, draw type 1
-			else if (extractedRoute.GetPointsAssignedIndex() != -1 ){
-				nextPointID = extractedRoute.GetPointsAssignedIndex();
-				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_REGULAR, nextPointID, probeNextID, &g, &dc, Display);
 			}// If off-route, draw type 2
 			else if (isRAM) {
 				createRouteDraw(&fp, acftLocation, DRAW_ROUTE_TYPE_OFF_ROUTE, nextPointID, probeNextID, &g, &dc, Display);
