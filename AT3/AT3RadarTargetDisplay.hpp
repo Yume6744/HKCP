@@ -103,6 +103,8 @@ private:
 
 	void drawWPTSelectSymbol(Graphics* g, CDC* dc, Pen& pen, SolidBrush& Brush, POINT point);
 
+	void drawRouteText(CDC* dc, HKCPDisplay* Display, int x, int y, const char* text);
+
 	void createRouteDraw(CFlightPlan fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
 };
 
