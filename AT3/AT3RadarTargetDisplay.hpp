@@ -19,8 +19,8 @@ namespace DrawRouteUI {
 	};
 
 	// Leader line offsets
-	const int LeaderStartX = 2;
-	const int LeaderStartY = -6;
+	const int LeaderStartX = 3;
+	const int LeaderStartY = -9;
 	const int LeaderElbowX = 22;
 	const int LeaderElbowY = -66;
 	const int LeaderEndX = 32;
@@ -56,8 +56,6 @@ public:
 		RECT Area,
 		int Button,
 		HKCPDisplay* Display);
-
-	void normalRouteDraw(CFlightPlan fp);
 
 	string GetControllerFreqFromId(string ID);
 
