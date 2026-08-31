@@ -8,6 +8,12 @@
 using namespace Gdiplus;
 using namespace EuroScopePlugIn;
 using namespace DrawRouteUI;
+bool AT3RadarTargetDisplay::isRadarEnabled = false;
+int AT3RadarTargetDisplay::radarOpacity = 50;
+bool AT3RadarTargetDisplay::isRadarThreadRunning = false;
+std::string AT3RadarTargetDisplay::lastDownloadedUrl = "";
+Gdiplus::Bitmap* AT3RadarTargetDisplay::cachedRadarBitmap = nullptr;
+std::mutex AT3RadarTargetDisplay::bmpMutex;
 
 AT3RadarTargetDisplay::AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOffset, bool _CJSLabelShowWhenTracked, double _PlaneIconScale, COLORREF colorA, COLORREF colorNA, COLORREF colorR) :
 	CJSLabelSize(_CJSLabelSize), CJSLabelOffset(_CJSLabelOffset), CJSLabelShowWhenTracked(_CJSLabelShowWhenTracked), PlaneIconScale(_PlaneIconScale)
@@ -19,9 +25,237 @@ AT3RadarTargetDisplay::AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOff
 	colorRouteDrawDCT.SetFromCOLORREF(ROUTE_DRAW_DCT);
 }
 
+bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDisplay* Display) {
+	// Check if the command matches exactly (case-insensitive)
+	if (strcmp(sCommandLine, ".hkcpwxr") == 0) {
+
+		// Toggle the state
+		isRadarEnabled = !isRadarEnabled;
+
+		if (isRadarEnabled) {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Enabled", true, true, false, false, false);
+			// Only start a new thread if one isn't already running
+			if (!isRadarThreadRunning) {
+				StartRadarPolling(Display);
+			}
+		}
+		else {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Disabled", true, true, false, false, false);
+			isRadarThreadRunning = false;
+			Display->RefreshMapContent();
+
+			// Safely delete the image from memory
+			//std::lock_guard<std::mutex> lock(bmpMutex);
+			//if (cachedRadarBitmap != nullptr) {
+			//	delete cachedRadarBitmap;
+			//	cachedRadarBitmap = nullptr;
+			//}
+			//lastDownloadedUrl = "";
+		}
+
+		return true; // Return true to tell EuroScope we handled this command
+	}
+	if (strncmp(sCommandLine, ".hkcpwxr opac ", 13) == 0) {
+
+		int inputOpacity = 100;
+
+		// Extract the integer typed after the space
+		if (sscanf_s(sCommandLine + 13, "%d", &inputOpacity) == 1) {
+
+			// Clamp the value so users can't type 999 or -50
+			if (inputOpacity < 0) inputOpacity = 0;
+			if (inputOpacity > 100) inputOpacity = 100;
+
+			radarOpacity = inputOpacity;
+
+			// CRITICAL: Clear the URL cache. 
+			// This tricks the background thread into instantly re-processing 
+			// and applying the new opacity, instead of making the user wait 
+			// for the next HKO weather update!
+			lastDownloadedUrl = "";
+
+			char msg[128];
+			snprintf(msg, sizeof(msg), "Weather Radar Opacity set to %d%%", radarOpacity);
+			GetPlugIn()->DisplayUserMessage("HKCP", "Weather", msg, true, true, false, false, false);
+			Display->RefreshMapContent();
+		}
+		return true;
+	}
+
+	return false; // Return false if it's not our command, so EuroScope handles it
+}
+
+bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDisplay* Display) {
+	// Check if the command matches exactly (case-insensitive)
+	if (strcmp(sCommandLine, ".hkcpwxr") == 0) {
+
+		// Toggle the state
+		isRadarEnabled = !isRadarEnabled;
+
+		if (isRadarEnabled) {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Enabled", true, true, false, false, false);
+			// Only start a new thread if one isn't already running
+			if (!isRadarThreadRunning) {
+				StartRadarPolling(Display);
+			}
+		}
+		else {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Disabled", true, true, false, false, false);
+			isRadarThreadRunning = false;
+			Display->RefreshMapContent();
+
+			// Safely delete the image from memory
+			//std::lock_guard<std::mutex> lock(bmpMutex);
+			//if (cachedRadarBitmap != nullptr) {
+			//	delete cachedRadarBitmap;
+			//	cachedRadarBitmap = nullptr;
+			//}
+			//lastDownloadedUrl = "";
+		}
+
+		return true; // Return true to tell EuroScope we handled this command
+	}
+	if (strncmp(sCommandLine, ".hkcpwxr opac ", 13) == 0) {
+
+		int inputOpacity = 100;
+
+		// Extract the integer typed after the space
+		if (sscanf_s(sCommandLine + 13, "%d", &inputOpacity) == 1) {
+
+			// Clamp the value so users can't type 999 or -50
+			if (inputOpacity < 0) inputOpacity = 0;
+			if (inputOpacity > 100) inputOpacity = 100;
+
+			radarOpacity = inputOpacity;
+
+			// CRITICAL: Clear the URL cache. 
+			// This tricks the background thread into instantly re-processing 
+			// and applying the new opacity, instead of making the user wait 
+			// for the next HKO weather update!
+			lastDownloadedUrl = "";
+
+			char msg[128];
+			snprintf(msg, sizeof(msg), "Weather Radar Opacity set to %d%%", radarOpacity);
+			GetPlugIn()->DisplayUserMessage("HKCP", "Weather", msg, true, true, false, false, false);
+			Display->RefreshMapContent();
+		}
+		return true;
+	}
+
+	return false; // Return false if it's not our command, so EuroScope handles it
+}
+
+bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDisplay* Display) {
+	// Check if the command matches exactly (case-insensitive)
+	if (strcmp(sCommandLine, ".hkcpwxr") == 0) {
+
+		// Toggle the state
+		isRadarEnabled = !isRadarEnabled;
+
+		if (isRadarEnabled) {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Enabled", true, true, false, false, false);
+			// Only start a new thread if one isn't already running
+			if (!isRadarThreadRunning) {
+				StartRadarPolling(Display);
+			}
+		}
+		else {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Disabled", true, true, false, false, false);
+			isRadarThreadRunning = false;
+			Display->RefreshMapContent();
+
+			// Safely delete the image from memory
+			//std::lock_guard<std::mutex> lock(bmpMutex);
+			//if (cachedRadarBitmap != nullptr) {
+			//	delete cachedRadarBitmap;
+			//	cachedRadarBitmap = nullptr;
+			//}
+			//lastDownloadedUrl = "";
+		}
+
+		return true; // Return true to tell EuroScope we handled this command
+	}
+	if (strncmp(sCommandLine, ".hkcpwxr opac ", 13) == 0) {
+
+		int inputOpacity = 100;
+
+		// Extract the integer typed after the space
+		if (sscanf_s(sCommandLine + 13, "%d", &inputOpacity) == 1) {
+
+			// Clamp the value so users can't type 999 or -50
+			if (inputOpacity < 0) inputOpacity = 0;
+			if (inputOpacity > 100) inputOpacity = 100;
+
+			radarOpacity = inputOpacity;
+
+			// CRITICAL: Clear the URL cache. 
+			// This tricks the background thread into instantly re-processing 
+			// and applying the new opacity, instead of making the user wait 
+			// for the next HKO weather update!
+			lastDownloadedUrl = "";
+
+			char msg[128];
+			snprintf(msg, sizeof(msg), "Weather Radar Opacity set to %d%%", radarOpacity);
+			GetPlugIn()->DisplayUserMessage("HKCP", "Weather", msg, true, true, false, false, false);
+			Display->RefreshMapContent();
+		}
+		return true;
+	}
+
+	return false; // Return false if it's not our command, so EuroScope handles it
+}
+
 void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 {
 	if (Phase != REFRESH_PHASE_AFTER_TAGS) {
+		if (Phase == REFRESH_PHASE_BACK_BITMAP) {
+			if (isRadarEnabled && cachedRadarBitmap != nullptr) {
+				CDC dc;
+				dc.Attach(hDC);
+
+				Graphics g(hDC);
+
+				// Lock the mutex so the background thread doesn't delete the bitmap while we draw it
+				std::lock_guard<std::mutex> lock(bmpMutex);
+
+				// 1. Define the Lat/Lon for the three required corners
+				CPosition posTopLeft, posTopRight, posBottomLeft;
+
+				// INPUT YOUR ACTUAL CORNER COORDINATES HERE
+				posTopLeft.LoadFromStrings("E111.40.59.000", "N024.36.20.000");     // Top-Left corner
+				posTopRight.LoadFromStrings("E116.39.36.000", "N024.36.20.000");    // Top-Right corner (Example)
+				posBottomLeft.LoadFromStrings("E111.40.59.000", "N020.00.03.000");  // Bottom-Left corner (Example)
+
+				// 2. Convert the Lat/Lon into on-screen pixel coordinates
+				// As you zoom or pan in EuroScope, these pixel values will automatically update!
+				POINT ptTL = Display->ConvertCoordFromPositionToPixel(posTopLeft);
+				POINT ptTR = Display->ConvertCoordFromPositionToPixel(posTopRight);
+				POINT ptBL = Display->ConvertCoordFromPositionToPixel(posBottomLeft);
+
+				// 3. Package them into a GDI+ Point array
+				// GDI+ specifically requires an array in this exact order: TL, TR, BL.
+				Gdiplus::Point destPoints[3] = {
+					Gdiplus::Point(ptTL.x, ptTL.y),
+					Gdiplus::Point(ptTR.x, ptTR.y),
+					Gdiplus::Point(ptBL.x, ptBL.y)
+				};
+
+				g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+
+				// 4. Draw and stretch the image!
+				g.DrawImage(cachedRadarBitmap, destPoints, 3);
+
+				//De-allocate graphics objects
+				dc.Detach();
+				g.ReleaseHDC(hDC);
+				dc.DeleteDC();
+
+				return;
+			}
+			else {
+				return;
+			}
+		}
 		return;
 	}
 
@@ -474,4 +708,162 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan fp, POINT acftLocation, 
 		}
 		prevPoint = nextPoint;
 	}
+}
+void AT3RadarTargetDisplay::StartRadarPolling(HKCPDisplay* Display) {
+	isRadarThreadRunning = true;
+
+	std::thread radarThread([this]() {
+		while (isRadarThreadRunning) {
+			// If the user disabled the radar, exit the thread gracefully
+			if (!isRadarEnabled) {
+				break;
+			}
+
+			time_t curr_time = time(NULL);
+			time_t hkt_time = curr_time + (8 * 3600); // UTC+8
+			tm* tm_hk = gmtime(&hkt_time);
+
+			int m = tm_hk->tm_min;
+			int target_min = 6;
+
+			if (m >= 54) target_min = 54;
+			else if (m >= 42) target_min = 42;
+			else if (m >= 30) target_min = 30;
+			else if (m >= 18) target_min = 18;
+			else if (m >= 6) target_min = 6;
+			else {
+				hkt_time -= 3600;
+				tm_hk = gmtime(&hkt_time);
+				target_min = 54;
+			}
+
+			char url[256];
+			snprintf(url, sizeof(url),
+				"https://www.hko.gov.hk/wxinfo/radars//radar_256_kml/%04d%02d%02d%02d%02d01_rad_256k.png",
+				tm_hk->tm_year + 1900, tm_hk->tm_mon + 1, tm_hk->tm_mday, tm_hk->tm_hour, target_min);
+
+			std::string currentUrl(url);
+
+			// If it's a new URL, download it directly to memory
+			if (lastDownloadedUrl != currentUrl && isRadarEnabled) {
+				IStream* pStream = nullptr;
+
+				// Download into the IStream
+				HRESULT res = URLOpenBlockingStreamA(NULL, url, &pStream, 0, NULL);
+
+				if (res == S_OK && pStream != nullptr && isRadarEnabled) {
+					GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Image downloaded", true, true, false, false, false);
+
+					// 1. Create the bitmap directly from the memory stream
+					Gdiplus::Bitmap* newBmp = new Gdiplus::Bitmap(pStream);
+					pStream->Release(); // Free the memory stream
+
+					if (newBmp->GetLastStatus() == Gdiplus::Ok) {
+
+						// 2. Process the image in the background (prevents screen lag)
+						ApplyMosaicAndRemoveBlack(newBmp, 2);
+
+						// 3. Safely swap the old bitmap with the new one
+						{
+							std::lock_guard<std::mutex> lock(bmpMutex);
+							Gdiplus::Bitmap* oldBmp = cachedRadarBitmap;
+							cachedRadarBitmap = newBmp;
+							if (oldBmp) delete oldBmp;
+						}
+
+						lastDownloadedUrl = currentUrl;
+					}
+					else {
+						delete newBmp; // Cleanup if image was corrupted
+					}
+				}
+			}
+		}
+
+		// Ensure flag is reset when thread dies naturally
+		isRadarThreadRunning = false;
+		});
+	Display->RefreshMapContent();
+	radarThread.detach();
+}
+
+void AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* bmp, int mosaicSize) {
+	if (!bmp) return;
+
+	UINT width = bmp->GetWidth();
+	UINT height = bmp->GetHeight();
+
+	Gdiplus::Rect rect(0, 0, width, height);
+	Gdiplus::BitmapData bmpData;
+
+	bmp->LockBits(&rect, Gdiplus::ImageLockModeRead | Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData);
+
+	int stride = bmpData.Stride;
+	UINT8* pixels = (UINT8*)bmpData.Scan0;
+
+	for (UINT y = 0; y < height; y += mosaicSize) {
+		for (UINT x = 0; x < width; x += mosaicSize) {
+
+			int sampleIdx = y * stride + x * 4;
+
+			UINT8 b = pixels[sampleIdx];
+			UINT8 g = pixels[sampleIdx + 1];
+			UINT8 r = pixels[sampleIdx + 2];
+			UINT8 a = pixels[sampleIdx + 3];
+
+			// 1. Filter out pure black and grayscale (like white text or gray range rings)
+			bool isBlack = (r < 10 && g < 10 && b < 10);
+			bool isGrayscale = (abs(r - g) < 20 && abs(g - b) < 20);
+
+			UINT8 snapR = 0, snapG = 0, snapB = 0;
+			bool isVisible = !(isBlack || isGrayscale || a < 10); // Also ignore fully transparent pixels
+
+			// 2. Decide the snapped color based on the RGB profile
+			if (isVisible) {
+				// HEAVY RAIN (Red, Dark Red, Magenta)
+				// Requires high Red, but very low Green. 
+				// (Catches the top 5 levels: 75 to >300 mm/h)
+				if (r > 100 && g < 80) {
+					snapR = 194; snapG = 41; snapB = 30;
+				}
+				// MODERATE RAIN (Yellow, Orange)
+				// Requires very high Red AND substantial Green. 
+				// (Catches the middle 4 levels: 10 to 75 mm/h)
+				else if (r > 200 && g >= 100) {
+					snapR = 240; snapG = 200; snapB = 0;
+				}
+				// LIGHT RAIN (Blues, Cyans, Greens, Lime Green)
+				// Everything else (low red, or high green with moderate red like Lime)
+				// (Catches the bottom 7 levels: 0.15 to 10 mm/h)
+				else {
+					snapR = 78; snapG = 148; snapB = 40;
+				}
+			}
+
+			// 3. Apply the chosen color to the entire mosaic block
+			for (UINT by = 0; by < mosaicSize && (y + by) < height; by++) {
+				for (UINT bx = 0; bx < mosaicSize && (x + bx) < width; bx++) {
+
+					int pixelIdx = (y + by) * stride + (x + bx) * 4;
+
+					if (!isVisible) {
+						pixels[pixelIdx + 3] = 0; // Set Alpha to 0
+					}
+					else {
+						// Remember: Windows ARGB format is B, G, R, A in memory
+						pixels[pixelIdx] = snapB;
+						pixels[pixelIdx + 1] = snapG;
+						pixels[pixelIdx + 2] = snapR;
+
+						// Apply your custom opacity setting! 
+						// We multiply against 255 to create crisp, solid color blocks
+						float opacityMultiplier = radarOpacity / 100.0f;
+						pixels[pixelIdx + 3] = (UINT8)(255 * opacityMultiplier);
+					}
+				}
+			}
+		}
+	}
+
+	bmp->UnlockBits(&bmpData);
 }
