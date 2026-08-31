@@ -226,7 +226,7 @@ void AT3Tags::OnGetTagItem(CFlightPlan FlightPlan, CRadarTarget RadarTarget, int
 			*pRGB = colorNotAssumed;
 			break;
 		case FLIGHT_PLAN_STATE_COORDINATED:
-			*pRGB = colorNotAssumed;
+			*pRGB = colorRedundant;
 			break;
 		case FLIGHT_PLAN_STATE_TRANSFER_TO_ME_INITIATED:
 			*pRGB = colorAssumed;
