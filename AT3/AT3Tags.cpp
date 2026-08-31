@@ -34,6 +34,7 @@ AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR, COLORREF co
 	RegisterTagItemType("AT3 AMAN Delay", TAG_ITEM_AT3_DELAY);
 	RegisterTagItemType("AT3 ALRT", TAG_ITEM_AT3_ALRT);
 	RegisterTagItemType("AT3 WTG", TAG_ITEM_AT3_WTG);
+	RegisterTagItemType("AT3 TSSR", TAG_ITEM_AT3_TSSR);
 
 	RegisterTagItemFunction("AT3 Approach Selection Menu", TAG_FUNC_APP_SEL_MENU);
 	RegisterTagItemFunction("AT3 Route Selection Menu", TAG_FUNC_RTE_SEL_MENU);
@@ -261,6 +262,16 @@ void AT3Tags::OnGetTagItem(CFlightPlan FlightPlan, CRadarTarget RadarTarget, int
 		case TAG_ITEM_AT3_ADSB_CALLSIGN:
 			tagOutput = GetADSBCallsign(RadarTarget);
 			break;
+		case TAG_ITEM_AT3_TSSR: {
+			tagOutput = GetTSSR(RadarTarget);
+			CFlightPlan uncorrelFp = FlightPlanSelect(RadarTarget.GetCallsign()); // we have to this because es doesn't have a method to determine whether a Position is inside a sector or not (i think) :(
+			if (RadarTarget.IsValid()) {
+				if (RadarTarget.GetPosition().GetPressureAltitude() > 100 && strlen(uncorrelFp.GetTrackingControllerId()) == 0 && uncorrelFp.GetSectorEntryMinutes() == 0) {
+					*pRGB = OVERRIDE_EMER.ToCOLORREF();
+				}
+			}
+			break;
+		}
 		default:
 			tagOutput = "";
 			isAT3Item = false;
@@ -1161,4 +1172,8 @@ string AT3Tags::GetWTG(CFlightPlan& FlightPlan)
 		return "";
 
 	return aliasIt->second;
+}
+
+string AT3Tags::GetTSSR(CRadarTarget& RadarTarget) {
+	return RadarTarget.GetPosition().GetSquawk();
 }

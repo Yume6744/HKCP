@@ -103,6 +103,8 @@ public:
 
 	static unordered_map<string, bool> showRouteDraw;
 
+	string GetTSSR(CRadarTarget& RadarTarget);
+
 protected:
 	int minu;
 	json appsJson;
