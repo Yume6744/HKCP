@@ -229,7 +229,7 @@ void AT3Tags::OnGetTagItem(CFlightPlan FlightPlan, CRadarTarget RadarTarget, int
 			*pRGB = colorNotAssumed;
 			break;
 		case FLIGHT_PLAN_STATE_TRANSFER_TO_ME_INITIATED:
-			*pRGB = colorRedundant;
+			*pRGB = colorAssumed;
 			break;
 		case FLIGHT_PLAN_STATE_TRANSFER_FROM_ME_INITIATED:
 			*pRGB = colorAssumed;
@@ -303,12 +303,16 @@ void AT3Tags::OnGetTagItem(CFlightPlan FlightPlan, CRadarTarget RadarTarget, int
 				tagOutput = GetCallsign(FlightPlan);
 				if (string(FlightPlan.GetFlightPlanData().GetPlanType()) == "V") {
 					*pRGB = colorVFR;
+				} else if (FlightPlan.GetState() == FLIGHT_PLAN_STATE_TRANSFER_TO_ME_INITIATED) {
+					*pRGB = OVERRIDE_AIW.ToCOLORREF();
 				}
 				break;
 			case TAG_ITEM_AT3_ATYPWTC:
 				tagOutput = GetATYPWTC(FlightPlan);
 				if (string(FlightPlan.GetFlightPlanData().GetPlanType()) == "V") {
 					*pRGB = colorVFR;
+				} else if (FlightPlan.GetState() == FLIGHT_PLAN_STATE_TRANSFER_TO_ME_INITIATED) {
+					*pRGB = OVERRIDE_AIW.ToCOLORREF();
 				}
 				break;
 			case TAG_ITEM_AT3_ARRIVAL_RWY:
