@@ -114,53 +114,53 @@ bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDispl
 void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 {
 	if (Phase != REFRESH_PHASE_AFTER_TAGS) {
-		{
-			if (Phase == REFRESH_PHASE_BACK_BITMAP) {
-				if (isRadarEnabled && cachedRadarBitmap != nullptr) {
-					CDC dc;
-					dc.Attach(hDC);
+		if (Phase == REFRESH_PHASE_BACK_BITMAP) {
+			if (isRadarEnabled && cachedRadarBitmap != nullptr) {
+				CDC dc;
+				dc.Attach(hDC);
 
-					Graphics g(hDC);
+				Graphics g(hDC);
 
-					// Lock the mutex so the background thread doesn't delete the bitmap while we draw it
-					std::lock_guard<std::mutex> lock(bmpMutex);
+				// Lock the mutex so the background thread doesn't delete the bitmap while we draw it
+				std::lock_guard<std::mutex> lock(bmpMutex);
 
-					// 1. Define the Lat/Lon for the three required corners
-					CPosition posTopLeft, posTopRight, posBottomLeft;
+				// 1. Define the Lat/Lon for the three required corners
+				CPosition posTopLeft, posTopRight, posBottomLeft;
 
-					// INPUT YOUR ACTUAL CORNER COORDINATES HERE
-					posTopLeft.LoadFromStrings("E111.40.59.000", "N024.36.20.000");     // Top-Left corner
-					posTopRight.LoadFromStrings("E116.39.36.000", "N024.36.20.000");    // Top-Right corner (Example)
-					posBottomLeft.LoadFromStrings("E111.40.59.000", "N020.00.03.000");  // Bottom-Left corner (Example)
+				// INPUT YOUR ACTUAL CORNER COORDINATES HERE
+				posTopLeft.LoadFromStrings("E111.40.59.000", "N024.36.20.000");     // Top-Left corner
+				posTopRight.LoadFromStrings("E116.39.36.000", "N024.36.20.000");    // Top-Right corner (Example)
+				posBottomLeft.LoadFromStrings("E111.40.59.000", "N020.00.03.000");  // Bottom-Left corner (Example)
 
-					// 2. Convert the Lat/Lon into on-screen pixel coordinates
-					// As you zoom or pan in EuroScope, these pixel values will automatically update!
-					POINT ptTL = Display->ConvertCoordFromPositionToPixel(posTopLeft);
-					POINT ptTR = Display->ConvertCoordFromPositionToPixel(posTopRight);
-					POINT ptBL = Display->ConvertCoordFromPositionToPixel(posBottomLeft);
+				// 2. Convert the Lat/Lon into on-screen pixel coordinates
+				// As you zoom or pan in EuroScope, these pixel values will automatically update!
+				POINT ptTL = Display->ConvertCoordFromPositionToPixel(posTopLeft);
+				POINT ptTR = Display->ConvertCoordFromPositionToPixel(posTopRight);
+				POINT ptBL = Display->ConvertCoordFromPositionToPixel(posBottomLeft);
 
-					Gdiplus::Point destPoints[3] = {
-						Gdiplus::Point(ptTL.x, ptTL.y),
-						Gdiplus::Point(ptTR.x, ptTR.y),
-						Gdiplus::Point(ptBL.x, ptBL.y)
-					};
+				Gdiplus::Point destPoints[3] = {
+					Gdiplus::Point(ptTL.x, ptTL.y),
+					Gdiplus::Point(ptTR.x, ptTR.y),
+					Gdiplus::Point(ptBL.x, ptBL.y)
+				};
 
-					g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
-					g.DrawImage(cachedRadarBitmap, destPoints, 3);
+				g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+				g.DrawImage(cachedRadarBitmap, destPoints, 3);
 
-					//De-allocate graphics objects
-					dc.Detach();
-					g.ReleaseHDC(hDC);
-					dc.DeleteDC();
+				//De-allocate graphics objects
+				dc.Detach();
+				g.ReleaseHDC(hDC);
+				dc.DeleteDC();
 
-					return;
-				}
-				else {
-					return;
-				}
+				return;
 			}
-			return;
+			else {
+				return;
+			}
 		}
+		return;
+	}
+			
 
 		// Create device context
 		CDC dc;
