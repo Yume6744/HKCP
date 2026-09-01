@@ -79,6 +79,30 @@ bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDispl
 		}
 		return true;
 	}
+	if (strncmp(sCommandLine, ".hkcpwxr dot ", 12) == 0) {
+
+		int inputDotSize = 2;
+
+		if (sscanf_s(sCommandLine + 12, "%d", &inputDotSize) == 1) {
+
+			// CRITICAL SAFETY CLAMP: 
+			// Do not allow users to type massive numbers or EuroScope will crash from Out-Of-Memory!
+			if (inputDotSize < 1) inputDotSize = 1; // 1 = No upscaling (Giant blocks/No dots)
+			if (inputDotSize > 4) inputDotSize = 4; // 4 = 4x upscaling (Tiny dots)
+
+			radarDotSize = inputDotSize;
+
+			// Clear the cache to force the background thread to instantly redraw the dots
+			lastDownloadedUrl = "";
+
+			char msg[128];
+			snprintf(msg, sizeof(msg), "Weather Radar Dot Density (Upscale) set to %dx", radarDotSize);
+			GetPlugIn()->DisplayUserMessage("HKCP", "Weather", msg, true, true, false, false, false);
+			StartRadarPolling(Display);
+			Display->RefreshMapContent();
+		}
+		return true;
+	}
 
 	return false; // Return false if it's not our command, so EuroScope handles it
 }
@@ -462,10 +486,9 @@ Gdiplus::Bitmap* AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitma
 	UINT8* pixels = (UINT8*)bmpData.Scan0;
 
 	// Scale the mosaic blocks to match the new 1600x1600 grid
-	int scaledMosaic = mosaicSize * upscale;
 
-	for (UINT y = 0; y < hiHeight; y += scaledMosaic) {
-		for (UINT x = 0; x < hiWidth; x += scaledMosaic) {
+	for (UINT y = 0; y < hiHeight; y += mosaicSize) {
+		for (UINT x = 0; x < hiWidth; x += mosaicSize) {
 
 			int sampleIdx = y * stride + x * 4;
 
@@ -492,8 +515,8 @@ Gdiplus::Bitmap* AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitma
 				}
 			}
 
-			for (UINT by = 0; by < (UINT)scaledMosaic && (y + by) < hiHeight; by++) {
-				for (UINT bx = 0; bx < (UINT)scaledMosaic && (x + bx) < hiWidth; bx++) {
+			for (UINT by = 0; by < (UINT)mosaicSize && (y + by) < hiHeight; by++) {
+				for (UINT bx = 0; bx < (UINT)mosaicSize && (x + bx) < hiWidth; bx++) {
 
 					int pixelIdx = (y + by) * stride + (x + bx) * 4;
 
