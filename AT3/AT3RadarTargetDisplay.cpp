@@ -745,7 +745,8 @@ Gdiplus::Bitmap* AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitma
 	int stride = bmpData.Stride;
 	UINT8* pixels = (UINT8*)bmpData.Scan0;
 
-	// Scale the mosaic blocks to match the new 1600x1600 grid
+	for (UINT y = 0; y < height; y += mosaicSize) {
+		for (UINT x = 0; x < width; x += mosaicSize) {
 
 	for (UINT y = 0; y < hiHeight; y += mosaicSize) {
 		for (UINT x = 0; x < hiWidth; x += mosaicSize) {
