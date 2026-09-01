@@ -68,7 +68,7 @@ public:
 
 	void StartRadarPolling(HKCPDisplay* Display);
 
-	void ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* bmp, int mosaicSize);
+	Gdiplus::Bitmap* ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* srcBmp, int mosaicSize);
 
 	//  This gets called before OnAsrContentToBeSaved()
 	inline virtual void OnAsrContentToBeClosed(void)
@@ -83,6 +83,7 @@ private:
 	unordered_map<string, bool> CJSLabelShowFreq;
 	static bool isRadarEnabled;
 	static int radarOpacity;
+	static int radarDotSize;
 	static bool isRadarThreadRunning;
 	static std::string lastDownloadedUrl;
 	static Gdiplus::Bitmap* cachedRadarBitmap;
