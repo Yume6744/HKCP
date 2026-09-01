@@ -87,6 +87,7 @@ void HKCPDisplay::OnFlightPlanControllerAssignedDataUpdate(CFlightPlan FlightPla
 bool HKCPDisplay::OnCompileCommand(const char* sCommandLine)
 {
 	bool a = MissAlarm->OnCompileCommand(sCommandLine);
+	a = RadarTargets->OnCompileCommand(sCommandLine, this);
 	return a;
 }
 

@@ -8,6 +8,13 @@
 using namespace Gdiplus;
 using namespace EuroScopePlugIn;
 using namespace DrawRouteUI;
+bool AT3RadarTargetDisplay::isRadarEnabled = false;
+int AT3RadarTargetDisplay::radarOpacity = 50;
+int AT3RadarTargetDisplay::radarDotSize = 2;
+bool AT3RadarTargetDisplay::isRadarThreadRunning = false;
+std::string AT3RadarTargetDisplay::lastDownloadedUrl = "";
+Gdiplus::Bitmap* AT3RadarTargetDisplay::cachedRadarBitmap = nullptr;
+std::mutex AT3RadarTargetDisplay::bmpMutex;
 
 AT3RadarTargetDisplay::AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOffset, bool _CJSLabelShowWhenTracked, double _PlaneIconScale, COLORREF colorA, COLORREF colorNA, COLORREF colorR) :
 	CJSLabelSize(_CJSLabelSize), CJSLabelOffset(_CJSLabelOffset), CJSLabelShowWhenTracked(_CJSLabelShowWhenTracked), PlaneIconScale(_PlaneIconScale)
@@ -19,9 +26,113 @@ AT3RadarTargetDisplay::AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOff
 	colorRouteDrawDCT.SetFromCOLORREF(ROUTE_DRAW_DCT);
 }
 
+bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDisplay* Display) {
+	// Check if the command matches exactly (case-insensitive)
+	if (strcmp(sCommandLine, ".hkcpwxr") == 0) {
+
+		// Toggle the state
+		isRadarEnabled = !isRadarEnabled;
+
+		if (isRadarEnabled) {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Enabled", true, true, false, false, false);
+			// Only start a new thread if one isn't already running
+			if (!isRadarThreadRunning) {
+				StartRadarPolling(Display);
+			}
+		}
+		else {
+			GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Radar Disabled", true, true, false, false, false);
+			isRadarThreadRunning = false;
+			Display->RefreshMapContent();
+
+			// Safely delete the image from memory
+			//std::lock_guard<std::mutex> lock(bmpMutex);
+			//if (cachedRadarBitmap != nullptr) {
+			//	delete cachedRadarBitmap;
+			//	cachedRadarBitmap = nullptr;
+			//}
+			//lastDownloadedUrl = "";
+		}
+		return true; // Return true to tell EuroScope we handled this command
+	}
+	if (strncmp(sCommandLine, ".hkcpwxr opac ", 13) == 0) {
+
+		int inputOpacity = 100;
+
+		// Extract the integer typed after the space
+		if (sscanf_s(sCommandLine + 13, "%d", &inputOpacity) == 1) {
+
+			// Clamp the value so users can't type 999 or -50
+			if (inputOpacity < 0) inputOpacity = 0;
+			if (inputOpacity > 100) inputOpacity = 100;
+
+			radarOpacity = inputOpacity;
+
+			// CRITICAL: Clear the URL cache. 
+			// This tricks the background thread into instantly re-processing 
+			// and applying the new opacity, instead of making the user wait 
+			// for the next HKO weather update!
+			lastDownloadedUrl = "";
+
+			char msg[128];
+			snprintf(msg, sizeof(msg), "Weather Radar Opacity set to %d%%", radarOpacity);
+			GetPlugIn()->DisplayUserMessage("HKCP", "Weather", msg, true, true, false, false, false);
+			StartRadarPolling(Display);
+			Display->RefreshMapContent();
+		}
+		return true;
+	}
+
+	return false; // Return false if it's not our command, so EuroScope handles it
+}
+
 void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 {
 	if (Phase != REFRESH_PHASE_AFTER_TAGS) {
+		if (Phase == REFRESH_PHASE_BACK_BITMAP) {
+			if (isRadarEnabled && cachedRadarBitmap != nullptr) {
+				CDC dc;
+				dc.Attach(hDC);
+
+				Graphics g(hDC);
+
+				// Lock the mutex so the background thread doesn't delete the bitmap while we draw it
+				std::lock_guard<std::mutex> lock(bmpMutex);
+
+				// 1. Define the Lat/Lon for the three required corners
+				CPosition posTopLeft, posTopRight, posBottomLeft;
+
+				// INPUT YOUR ACTUAL CORNER COORDINATES HERE
+				posTopLeft.LoadFromStrings("E111.40.59.000", "N024.36.20.000");     // Top-Left corner
+				posTopRight.LoadFromStrings("E116.39.36.000", "N024.36.20.000");    // Top-Right corner (Example)
+				posBottomLeft.LoadFromStrings("E111.40.59.000", "N020.00.03.000");  // Bottom-Left corner (Example)
+
+				// 2. Convert the Lat/Lon into on-screen pixel coordinates
+				// As you zoom or pan in EuroScope, these pixel values will automatically update!
+				POINT ptTL = Display->ConvertCoordFromPositionToPixel(posTopLeft);
+				POINT ptTR = Display->ConvertCoordFromPositionToPixel(posTopRight);
+				POINT ptBL = Display->ConvertCoordFromPositionToPixel(posBottomLeft);
+
+				Gdiplus::Point destPoints[3] = {
+					Gdiplus::Point(ptTL.x, ptTL.y),
+					Gdiplus::Point(ptTR.x, ptTR.y),
+					Gdiplus::Point(ptBL.x, ptBL.y)
+				};
+
+				g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+				g.DrawImage(cachedRadarBitmap, destPoints, 3);
+
+				//De-allocate graphics objects
+				dc.Detach();
+				g.ReleaseHDC(hDC);
+				dc.DeleteDC();
+
+				return;
+			}
+			else {
+				return;
+			}
+		}
 		return;
 	}
 
@@ -120,26 +231,26 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 		g.RotateTransform(acft.GetPosition().GetReportedHeadingTrueNorth());
 
 		// Set Anti-aliasing
-		g.SetSmoothingMode(SmoothingModeAntiAlias);
+		//g.SetSmoothingMode(SmoothingModeAntiAlias);
 
 		// Define aircraft icon
 		Point aircraftIcon[19] = {
 			Point(0,-7),
 			Point(-1,-6),
 			Point(-1,-2),
+			Point(-7,1),
 			Point(-7,3),
-			Point(-7,4),
-			Point(-1,2),
-			Point(-1,6),
-			Point(-4,8),
-			Point(-4,9),
-			Point(0,8),
-			Point(4,9),
-			Point(4,8),
-			Point(1,6),
-			Point(1,2),
-			Point(7,4),
+			Point(-1,1),
+			Point(-1,4),
+			Point(-4,5),
+			Point(-4,7),
+			Point(0,6),
+			Point(4,7),
+			Point(4,5),
+			Point(1,4),
+			Point(1,1),
 			Point(7,3),
+			Point(7,1),
 			Point(1,-2),
 			Point(1,-6),
 			Point(0,-7)
@@ -363,6 +474,13 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 	nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 	probeNext = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(probeNextID));
 
+	// Allow CDC content to clip
+	CRect allowedArea(0, Display->GetToolbarArea().bottom + TopSky_ToolbarHeight, 99999, 99999);
+
+	auto SafeTextOut = [&](int x, int y, const char* text) {
+		dc->ExtTextOutA(x, y, ETO_CLIPPED, &allowedArea, text, strlen(text), NULL);
+		};
+
 	for (nextPointID; nextPointID < pointCount; nextPointID++) {
 		nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 
@@ -374,11 +492,18 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 				airway = extractedRoute.GetPointAirwayName(nextPointID);
 			}
 		}
+		else if (DrawType == DRAW_ROUTE_TYPE_OFF_ROUTE) {
+			airway = extractedRoute.GetPointAirwayName(nextPointID);
+		}
+		else if (DrawType == DRAW_ROUTE_TYPE_PROBE_DCT || DrawType == DRAW_ROUTE_TYPE_PROBE_DCT_NORMAL) {
+			airway = extractedRoute.GetPointAirwayName(nextPointID);
+		}
 		else {
 			airway = extractedRoute.GetPointAirwayName(nextPointID);
 		}
 
 		routeTag = formatRouteTag(extractedRoute, nextPointID, tm_gmt);
+		CSize routeTagSize = dc->GetTextExtent(routeTag.c_str());
 
 		// Type 1: Normal route draw (start from aircraft to next point)
 		if (DrawType == DRAW_ROUTE_TYPE_REGULAR) {

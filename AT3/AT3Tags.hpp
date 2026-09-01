@@ -91,6 +91,12 @@ public:
 
 	string GetFormattedArrivalRwy(CFlightPlan& FlightPlan);
 
+	static void SplitCallsign(const std::string& callsign, std::string& prefix, std::string& number);
+
+	static bool isSimilarCallsign(const std::string& CurrentPrefix, std::string& CurrentNum, std::string& otherPrefix, std::string& otherNum);
+
+	static bool isCorrelateCorrect(CFlightPlan FlightPlan, string CurrentCallsign);
+
 	string GetALRT(CFlightPlan& FlightPlan);
 
 	string GetWTG(CFlightPlan& FlightPlan);

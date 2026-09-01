@@ -5,6 +5,7 @@
 #include <sstream>
 #include <vector>
 #include <string>
+#include <mutex>
 #include <iostream>
 #include <unordered_map>
 #include <gdiplus.h>
@@ -48,6 +49,8 @@ class AT3RadarTargetDisplay :
 public:
     AT3RadarTargetDisplay(int _CJSLabelSize, int _CJSLabelOffset, bool _CJSLabelShowWhenTracked, double _PlaneIconScale, COLORREF colorA, COLORREF colorNA, COLORREF colorR);
     
+	virtual bool OnCompileCommand(const char* sCommandLine, HKCPDisplay* Display);
+
     void OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display);
 
 	void OnClickScreenObject(int ObjectType,
@@ -57,9 +60,15 @@ public:
 		int Button,
 		HKCPDisplay* Display);
 
+	void normalRouteDraw(CFlightPlan fp);
+
 	string GetControllerFreqFromId(string ID);
 
 	string GetControllerIdFromCallsign(string callsign);
+
+	void StartRadarPolling(HKCPDisplay* Display);
+
+	Gdiplus::Bitmap* ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* srcBmp, int mosaicSize);
 
 	//  This gets called before OnAsrContentToBeSaved()
 	inline virtual void OnAsrContentToBeClosed(void)
@@ -72,6 +81,13 @@ private:
 	bool CJSLabelShowWhenTracked;
 	double PlaneIconScale;
 	unordered_map<string, bool> CJSLabelShowFreq;
+	static bool isRadarEnabled;
+	static int radarOpacity;
+	static int radarDotSize;
+	static bool isRadarThreadRunning;
+	static std::string lastDownloadedUrl;
+	static Gdiplus::Bitmap* cachedRadarBitmap;
+	static std::mutex bmpMutex;
 
 	Color colorAssumed;
 	Color colorNotAssumed;
