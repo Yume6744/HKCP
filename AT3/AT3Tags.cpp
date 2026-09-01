@@ -333,6 +333,52 @@ void AT3Tags::OnGetTagItem(CFlightPlan FlightPlan, CRadarTarget RadarTarget, int
 	}
 }
 
+void AT3Tags::SplitCallsign(const std::string& callsign, std::string& prefix, std::string& number) {
+	prefix = "";
+	number = "";
+	for (char c : callsign) {
+		// All letters belongs to prefix
+		if (std::isalpha(c) && number.empty()) {
+			prefix += c;
+		}
+		// Rest belongs to number
+		else {
+			number += c;
+		}
+	}
+}
+
+bool AT3Tags::isSimilarCallsign(const std::string& CurrentPrefix, std::string& CurrentNum, std::string& otherPrefix, std::string& otherNum) {
+	int matchCount = 0;
+	string tempNum2 = otherNum;
+	for (char c : CurrentNum) {
+		size_t pos = tempNum2.find(c);
+		if (pos != std::string::npos) {
+			matchCount++;
+			tempNum2.erase(pos, 1);
+		}
+	}
+	float longerNumLength = max(CurrentNum.length(), otherNum.length());
+	float numSimilarity = matchCount / longerNumLength;
+
+	if (CurrentNum == otherNum) {
+		return true;
+	}
+	else if (CurrentPrefix == otherPrefix && numSimilarity > 0.5) {
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+bool AT3Tags::isCorrelateCorrect(CFlightPlan FlightPlan, string CurrentCallsign) {
+	string correlatedCallsign = FlightPlan.GetCorrelatedRadarTarget().GetCallsign();
+	if (CurrentCallsign != correlatedCallsign) {
+		return false;
+	}
+}
+
 void AT3Tags::OnTimer(int Counter) {
 	if (Counter % 10 != 0) {
 		return;

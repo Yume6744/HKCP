@@ -474,9 +474,6 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 	nextPoint = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(nextPointID));
 	probeNext = Display->ConvertCoordFromPositionToPixel(extractedRoute.GetPointPosition(probeNextID));
 
-	// Allow CDC content to clip
-	CRect allowedArea(0, Display->GetToolbarArea().bottom + TopSky_ToolbarHeight, 99999, 99999);
-
 	auto SafeTextOut = [&](int x, int y, const char* text) {
 		dc->ExtTextOutA(x, y, ETO_CLIPPED, &allowedArea, text, strlen(text), NULL);
 		};
@@ -584,4 +581,179 @@ void AT3RadarTargetDisplay::createRouteDraw(CFlightPlan* fp, POINT acftLocation,
 		}
 		prevPoint = nextPoint;
 	}
+}
+
+void AT3RadarTargetDisplay::StartRadarPolling(HKCPDisplay* Display) {
+	isRadarThreadRunning = true;
+
+	std::thread radarThread([this]() {
+		while (isRadarThreadRunning) {
+			// If the user disabled the radar, exit the thread gracefully
+			if (!isRadarEnabled) {
+				break;
+			}
+
+			time_t curr_time = time(NULL);
+			time_t hkt_time = curr_time + (8 * 3600); // UTC+8
+			tm* tm_hk = gmtime(&hkt_time);
+
+			int m = tm_hk->tm_min;
+			int target_min = 6;
+
+			if (m >= 54) target_min = 54;
+			else if (m >= 42) target_min = 42;
+			else if (m >= 30) target_min = 30;
+			else if (m >= 18) target_min = 18;
+			else if (m >= 6) target_min = 6;
+			else {
+				hkt_time -= 3600;
+				tm_hk = gmtime(&hkt_time);
+				target_min = 54;
+			}
+
+			char url[256];
+			snprintf(url, sizeof(url),
+				"https://www.hko.gov.hk/wxinfo/radars//radar_256_kml/%04d%02d%02d%02d%02d01_rad_256k.png",
+				tm_hk->tm_year + 1900, tm_hk->tm_mon + 1, tm_hk->tm_mday, tm_hk->tm_hour, target_min);
+
+			std::string currentUrl(url);
+
+			// If it's a new URL, download it directly to memory
+			if (lastDownloadedUrl != currentUrl && isRadarEnabled) {
+				IStream* pStream = nullptr;
+
+				// Download into the IStream
+				HRESULT res = URLOpenBlockingStreamA(NULL, url, &pStream, 0, NULL);
+
+				if (res == S_OK && pStream != nullptr && isRadarEnabled) {
+					GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Download OK! Processing image...", true, true, false, false, false);
+
+					Gdiplus::Bitmap* newBmp = new Gdiplus::Bitmap(pStream);
+					pStream->Release();
+
+					if (newBmp->GetLastStatus() == Gdiplus::Ok) {
+
+						// 1. Capture the newly generated 1600x1600 upscale bitmap
+						// (ApplyMosaicAndRemoveBlack deletes newBmp internally)
+						Gdiplus::Bitmap* processedBmp = ApplyMosaicAndRemoveBlack(newBmp, 2);
+
+						if (processedBmp != nullptr && processedBmp->GetLastStatus() == Gdiplus::Ok) {
+
+							// 2. Thread-safely swap the cache pointer
+							{
+								std::lock_guard<std::mutex> lock(bmpMutex);
+								Gdiplus::Bitmap* oldBmp = cachedRadarBitmap;
+								cachedRadarBitmap = processedBmp;
+								if (oldBmp) delete oldBmp;
+							}
+
+							lastDownloadedUrl = currentUrl;
+							GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Image processed.", true, true, false, false, false);
+						}
+						else {
+							if (processedBmp) delete processedBmp;
+							GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Error: Image processing failed.", true, true, false, false, false);
+						}
+					}
+					else {
+						delete newBmp;
+						GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Error: Corrupted image received.", true, true, false, false, false);
+					}
+				}
+			}
+		}
+
+		// Ensure flag is reset when thread dies naturally
+		isRadarThreadRunning = false;
+		});
+	Display->RefreshMapContent();
+	radarThread.detach();
+}
+
+Gdiplus::Bitmap* AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* srcBmp, int mosaicSize) {
+	if (!srcBmp) return nullptr;
+
+	// Use the dynamic dot size! (1 = solid blocks, 2 = standard dots, 4 = tiny dots)
+	int upscale = radarDotSize;
+
+	UINT hiWidth = srcBmp->GetWidth() * upscale;
+	UINT hiHeight = srcBmp->GetHeight() * upscale;
+
+	Gdiplus::Bitmap* hiResBmp = new Gdiplus::Bitmap(hiWidth, hiHeight, PixelFormat32bppARGB);
+	{
+		Gdiplus::Graphics g(hiResBmp);
+		g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+		g.DrawImage(srcBmp, 0, 0, hiWidth, hiHeight);
+	}
+
+	Gdiplus::Rect rect(0, 0, hiWidth, hiHeight);
+	Gdiplus::BitmapData bmpData;
+	hiResBmp->LockBits(&rect, Gdiplus::ImageLockModeRead | Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData);
+
+	int stride = bmpData.Stride;
+	UINT8* pixels = (UINT8*)bmpData.Scan0;
+
+	// Scale the mosaic blocks to match the new 1600x1600 grid
+	int scaledMosaic = mosaicSize * upscale;
+
+	for (UINT y = 0; y < hiHeight; y += scaledMosaic) {
+		for (UINT x = 0; x < hiWidth; x += scaledMosaic) {
+
+			int sampleIdx = y * stride + x * 4;
+
+			UINT8 b = pixels[sampleIdx];
+			UINT8 g = pixels[sampleIdx + 1];
+			UINT8 r = pixels[sampleIdx + 2];
+			UINT8 a = pixels[sampleIdx + 3];
+
+			bool isBlack = (r < 10 && g < 10 && b < 10);
+			bool isGrayscale = (abs(r - g) < 20 && abs(g - b) < 20);
+
+			UINT8 snapR = 0, snapG = 0, snapB = 0;
+			bool isVisible = !(isBlack || isGrayscale || a < 10);
+
+			if (isVisible) {
+				if (r > 100 && g < 80) {
+					snapR = 194; snapG = 41; snapB = 30;
+				}
+				else if (r > 80 && g >= 80) {
+					snapR = 240; snapG = 200; snapB = 0;
+				}
+				else {
+					snapR = 78; snapG = 148; snapB = 40;
+				}
+			}
+
+			for (UINT by = 0; by < (UINT)scaledMosaic && (y + by) < hiHeight; by++) {
+				for (UINT bx = 0; bx < (UINT)scaledMosaic && (x + bx) < hiWidth; bx++) {
+
+					int pixelIdx = (y + by) * stride + (x + bx) * 4;
+
+					UINT pixelX = x + bx;
+					UINT pixelY = y + by;
+
+					// Dot noise pattern evaluated at the finer 1600x1600 resolution
+					bool isDot = (((pixelX * 3241) + (pixelY * 5479)) % 100) < 35;
+
+					if (!isVisible || !isDot) {
+						pixels[pixelIdx + 3] = 0;
+					}
+					else {
+						pixels[pixelIdx] = snapB;
+						pixels[pixelIdx + 1] = snapG;
+						pixels[pixelIdx + 2] = snapR;
+
+						float opacityMultiplier = radarOpacity / 100.0f;
+						pixels[pixelIdx + 3] = (UINT8)(255 * opacityMultiplier);
+					}
+				}
+			}
+		}
+	}
+
+	hiResBmp->UnlockBits(&bmpData);
+
+	// Free the original 800x800 bitmap from memory
+	delete srcBmp;
+	return hiResBmp;
 }
