@@ -20,8 +20,8 @@ namespace DrawRouteUI {
 	};
 
 	// Leader line offsets
-	const int LeaderStartX = 2;
-	const int LeaderStartY = -6;
+	const int LeaderStartX = 3;
+	const int LeaderStartY = -9;
 	const int LeaderElbowX = 22;
 	const int LeaderElbowY = -66;
 	const int LeaderEndX = 32;
@@ -95,8 +95,14 @@ private:
 	Color colorRouteDraw;
 	Color colorRouteDrawDCT;
 
-	string formatRouteTag(CFlightPlanExtractedRoute extractedRoute, int nextPointID, tm* tm_gmt);
+	string formatRouteTag(CFlightPlanExtractedRoute& extractedRoute, int nextPointID, tm* tm_gmt) const;
 
-	void createRouteDraw(CFlightPlan fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
+	void drawRouteLine(Graphics* g, CDC* dc, HKCPDisplay* Display, CRect allowedArea, Pen& pen, POINT point1, POINT point2, const char* airway);
+
+	void drawRouteTag(Graphics* g, CDC* dc, HKCPDisplay* Display, CRect allowedArea, Pen& pen, POINT point, const char* routeTag);
+
+	void drawWPTSelectSymbol(Graphics* g, CDC* dc, Pen& pen, SolidBrush& Brush, POINT point);
+
+	void createRouteDraw(CFlightPlan* fp, POINT acftLocation, enum DrawType DrawType, int nextPointID, int probeNextID, Graphics* g, CDC* dc, HKCPDisplay* Display);
 };
 
