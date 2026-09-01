@@ -34,7 +34,7 @@ AT3Tags::AT3Tags(COLORREF colorA, COLORREF colorNA, COLORREF colorR, COLORREF co
 	RegisterTagItemType("AT3 AMAN Delay", TAG_ITEM_AT3_DELAY);
 	RegisterTagItemType("AT3 ALRT", TAG_ITEM_AT3_ALRT);
 	RegisterTagItemType("AT3 WTG", TAG_ITEM_AT3_WTG);
-	RegisterTagItemType("AT3 TSSR", TAG_ITEM_AT3_TSSR);
+	RegisterTagItemType("AT3 TSSR (Uncorrelated)", TAG_ITEM_AT3_TSSR);
 
 	RegisterTagItemFunction("AT3 Approach Selection Menu", TAG_FUNC_APP_SEL_MENU);
 	RegisterTagItemFunction("AT3 Route Selection Menu", TAG_FUNC_RTE_SEL_MENU);
