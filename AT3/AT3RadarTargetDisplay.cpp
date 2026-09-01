@@ -9,6 +9,7 @@ using namespace EuroScopePlugIn;
 
 bool AT3RadarTargetDisplay::isRadarEnabled = false;
 int AT3RadarTargetDisplay::radarOpacity = 50;
+int AT3RadarTargetDisplay::radarDotSize = 2;
 bool AT3RadarTargetDisplay::isRadarThreadRunning = false;
 std::string AT3RadarTargetDisplay::lastDownloadedUrl = "";
 Gdiplus::Bitmap* AT3RadarTargetDisplay::cachedRadarBitmap = nullptr;
@@ -49,7 +50,6 @@ bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDispl
 			//}
 			//lastDownloadedUrl = "";
 		}
-
 		return true; // Return true to tell EuroScope we handled this command
 	}
 	if (strncmp(sCommandLine, ".hkcpwxr opac ", 13) == 0) {
@@ -74,6 +74,7 @@ bool AT3RadarTargetDisplay::OnCompileCommand(const char* sCommandLine, HKCPDispl
 			char msg[128];
 			snprintf(msg, sizeof(msg), "Weather Radar Opacity set to %d%%", radarOpacity);
 			GetPlugIn()->DisplayUserMessage("HKCP", "Weather", msg, true, true, false, false, false);
+			StartRadarPolling(Display);
 			Display->RefreshMapContent();
 		}
 		return true;
@@ -109,8 +110,6 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 				POINT ptTR = Display->ConvertCoordFromPositionToPixel(posTopRight);
 				POINT ptBL = Display->ConvertCoordFromPositionToPixel(posBottomLeft);
 
-				// 3. Package them into a GDI+ Point array
-				// GDI+ specifically requires an array in this exact order: TL, TR, BL.
 				Gdiplus::Point destPoints[3] = {
 					Gdiplus::Point(ptTL.x, ptTL.y),
 					Gdiplus::Point(ptTR.x, ptTR.y),
@@ -118,8 +117,6 @@ void AT3RadarTargetDisplay::OnRefresh(HDC hDC, int Phase, HKCPDisplay* Display)
 				};
 
 				g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
-
-				// 4. Draw and stretch the image!
 				g.DrawImage(cachedRadarBitmap, destPoints, 3);
 
 				//De-allocate graphics objects
@@ -397,29 +394,38 @@ void AT3RadarTargetDisplay::StartRadarPolling(HKCPDisplay* Display) {
 				HRESULT res = URLOpenBlockingStreamA(NULL, url, &pStream, 0, NULL);
 
 				if (res == S_OK && pStream != nullptr && isRadarEnabled) {
-					GetPlugIn()->DisplayUserMessage("HKCP", "HKCP", "Weather Image downloaded", true, true, false, false, false);
+					GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Download OK! Processing image...", true, true, false, false, false);
 
-					// 1. Create the bitmap directly from the memory stream
 					Gdiplus::Bitmap* newBmp = new Gdiplus::Bitmap(pStream);
-					pStream->Release(); // Free the memory stream
+					pStream->Release();
 
 					if (newBmp->GetLastStatus() == Gdiplus::Ok) {
 
-						// 2. Process the image in the background (prevents screen lag)
-						ApplyMosaicAndRemoveBlack(newBmp, 2);
+						// 1. Capture the newly generated 1600x1600 upscale bitmap
+						// (ApplyMosaicAndRemoveBlack deletes newBmp internally)
+						Gdiplus::Bitmap* processedBmp = ApplyMosaicAndRemoveBlack(newBmp, 2);
 
-						// 3. Safely swap the old bitmap with the new one
-						{
-							std::lock_guard<std::mutex> lock(bmpMutex);
-							Gdiplus::Bitmap* oldBmp = cachedRadarBitmap;
-							cachedRadarBitmap = newBmp;
-							if (oldBmp) delete oldBmp;
+						if (processedBmp != nullptr && processedBmp->GetLastStatus() == Gdiplus::Ok) {
+
+							// 2. Thread-safely swap the cache pointer
+							{
+								std::lock_guard<std::mutex> lock(bmpMutex);
+								Gdiplus::Bitmap* oldBmp = cachedRadarBitmap;
+								cachedRadarBitmap = processedBmp;
+								if (oldBmp) delete oldBmp;
+							}
+
+							lastDownloadedUrl = currentUrl;
+							GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Image processed.", true, true, false, false, false);
 						}
-
-						lastDownloadedUrl = currentUrl;
+						else {
+							if (processedBmp) delete processedBmp;
+							GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Error: Image processing failed.", true, true, false, false, false);
+						}
 					}
 					else {
-						delete newBmp; // Cleanup if image was corrupted
+						delete newBmp;
+						GetPlugIn()->DisplayUserMessage("HKCP", "Weather", "Error: Corrupted image received.", true, true, false, false, false);
 					}
 				}
 			}
@@ -432,22 +438,34 @@ void AT3RadarTargetDisplay::StartRadarPolling(HKCPDisplay* Display) {
 	radarThread.detach();
 }
 
-void AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* bmp, int mosaicSize) {
-	if (!bmp) return;
+Gdiplus::Bitmap* AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* srcBmp, int mosaicSize) {
+	if (!srcBmp) return nullptr;
 
-	UINT width = bmp->GetWidth();
-	UINT height = bmp->GetHeight();
+	// Use the dynamic dot size! (1 = solid blocks, 2 = standard dots, 4 = tiny dots)
+	int upscale = radarDotSize;
 
-	Gdiplus::Rect rect(0, 0, width, height);
+	UINT hiWidth = srcBmp->GetWidth() * upscale;
+	UINT hiHeight = srcBmp->GetHeight() * upscale;
+
+	Gdiplus::Bitmap* hiResBmp = new Gdiplus::Bitmap(hiWidth, hiHeight, PixelFormat32bppARGB);
+	{
+		Gdiplus::Graphics g(hiResBmp);
+		g.SetInterpolationMode(Gdiplus::InterpolationModeNearestNeighbor);
+		g.DrawImage(srcBmp, 0, 0, hiWidth, hiHeight);
+	}
+
+	Gdiplus::Rect rect(0, 0, hiWidth, hiHeight);
 	Gdiplus::BitmapData bmpData;
-
-	bmp->LockBits(&rect, Gdiplus::ImageLockModeRead | Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData);
+	hiResBmp->LockBits(&rect, Gdiplus::ImageLockModeRead | Gdiplus::ImageLockModeWrite, PixelFormat32bppARGB, &bmpData);
 
 	int stride = bmpData.Stride;
 	UINT8* pixels = (UINT8*)bmpData.Scan0;
 
-	for (UINT y = 0; y < height; y += mosaicSize) {
-		for (UINT x = 0; x < width; x += mosaicSize) {
+	// Scale the mosaic blocks to match the new 1600x1600 grid
+	int scaledMosaic = mosaicSize * upscale;
+
+	for (UINT y = 0; y < hiHeight; y += scaledMosaic) {
+		for (UINT x = 0; x < hiWidth; x += scaledMosaic) {
 
 			int sampleIdx = y * stride + x * 4;
 
@@ -456,52 +474,43 @@ void AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* bmp, int 
 			UINT8 r = pixels[sampleIdx + 2];
 			UINT8 a = pixels[sampleIdx + 3];
 
-			// 1. Filter out pure black and grayscale (like white text or gray range rings)
 			bool isBlack = (r < 10 && g < 10 && b < 10);
 			bool isGrayscale = (abs(r - g) < 20 && abs(g - b) < 20);
 
 			UINT8 snapR = 0, snapG = 0, snapB = 0;
-			bool isVisible = !(isBlack || isGrayscale || a < 10); // Also ignore fully transparent pixels
+			bool isVisible = !(isBlack || isGrayscale || a < 10);
 
-			// 2. Decide the snapped color based on the RGB profile
 			if (isVisible) {
-				// HEAVY RAIN (Red, Dark Red, Magenta)
-				// Requires high Red, but very low Green. 
-				// (Catches the top 5 levels: 75 to >300 mm/h)
 				if (r > 100 && g < 80) {
 					snapR = 194; snapG = 41; snapB = 30;
 				}
-				// MODERATE RAIN (Yellow, Orange)
-				// Requires very high Red AND substantial Green. 
-				// (Catches the middle 4 levels: 10 to 75 mm/h)
-				else if (r > 200 && g >= 100) {
+				else if (r > 80 && g >= 80) {
 					snapR = 240; snapG = 200; snapB = 0;
 				}
-				// LIGHT RAIN (Blues, Cyans, Greens, Lime Green)
-				// Everything else (low red, or high green with moderate red like Lime)
-				// (Catches the bottom 7 levels: 0.15 to 10 mm/h)
 				else {
 					snapR = 78; snapG = 148; snapB = 40;
 				}
 			}
 
-			// 3. Apply the chosen color to the entire mosaic block
-			for (UINT by = 0; by < mosaicSize && (y + by) < height; by++) {
-				for (UINT bx = 0; bx < mosaicSize && (x + bx) < width; bx++) {
+			for (UINT by = 0; by < (UINT)scaledMosaic && (y + by) < hiHeight; by++) {
+				for (UINT bx = 0; bx < (UINT)scaledMosaic && (x + bx) < hiWidth; bx++) {
 
 					int pixelIdx = (y + by) * stride + (x + bx) * 4;
 
-					if (!isVisible) {
-						pixels[pixelIdx + 3] = 0; // Set Alpha to 0
+					UINT pixelX = x + bx;
+					UINT pixelY = y + by;
+
+					// Dot noise pattern evaluated at the finer 1600x1600 resolution
+					bool isDot = (((pixelX * 3241) + (pixelY * 5479)) % 100) < 35;
+
+					if (!isVisible || !isDot) {
+						pixels[pixelIdx + 3] = 0;
 					}
 					else {
-						// Remember: Windows ARGB format is B, G, R, A in memory
 						pixels[pixelIdx] = snapB;
 						pixels[pixelIdx + 1] = snapG;
 						pixels[pixelIdx + 2] = snapR;
 
-						// Apply your custom opacity setting! 
-						// We multiply against 255 to create crisp, solid color blocks
 						float opacityMultiplier = radarOpacity / 100.0f;
 						pixels[pixelIdx + 3] = (UINT8)(255 * opacityMultiplier);
 					}
@@ -510,5 +519,9 @@ void AT3RadarTargetDisplay::ApplyMosaicAndRemoveBlack(Gdiplus::Bitmap* bmp, int 
 		}
 	}
 
-	bmp->UnlockBits(&bmpData);
+	hiResBmp->UnlockBits(&bmpData);
+
+	// Free the original 800x800 bitmap from memory
+	delete srcBmp;
+	return hiResBmp;
 }
